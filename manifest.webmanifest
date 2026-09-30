@@ -1,0 +1,16 @@
+{
+  "name": "電線許容電流計算機",
+  "short_name": "許容電流",
+  "description": "IV・VVF・CV/CVT・6.6kVケーブルなどの許容電流を計算し、負荷からサイズを選定するツール",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e9ebe7",
+  "theme_color": "#1b2123",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

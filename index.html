@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e9ebe7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131719" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="許容電流">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<style>html{padding-top:env(safe-area-inset-top,0px)}</style>
+</head>
+<body>
+<title>電線許容電流計算機</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* レイアウト: 左に条件パネル(電線の種類・布設条件)、右に結果。結果は「大きな許容電流値＋断面図」→計算の内訳→全サイズ表。スマホでは縦に積む */
+:root{
+  --bg:#e9ebe7;          /* VVFシースのような灰緑 */
+  --panel:#fafaf8;
+  --sunk:#e1e4df;
+  --ink:#1b2123;
+  --mute:#5a6467;
+  --line:#cfd4cf;
+  --accent:#a24d1c;      /* 銅 */
+  --accent-2:#c46a33;
+  --accent-soft:#f3e0d2;
+  --ok:#2a7648; --ok-soft:#d9eee1;
+  --ng:#b3382a; --ng-soft:#f6dad5;
+  --warn:#8d600c; --warn-soft:#f5ead0;
+  /* 断面図の実物色 */
+  --cu:#c8733a; --cu-hi:#e4a06c;
+  --c-blk:#2b2f31; --c-wht:#f1f1ec; --c-red:#c43b2f; --c-grn:#2f8a4a; --c-blu:#2f5fa8; --c-yel:#d8b23a;
+  --sh-cv:#2d3133; --sh-vv:#b7bab4; --sh-eco:#e4e1d6; --sh-cab:#7c8285; --semi:#555b5e;
+  --xs-stroke:#1b2123;
+  --f-body:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,"Consolas",monospace;
+  --bar-bg:#1b2123; --bar-fg:#e9ebe7; --bar-acc:#f0a270;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#131719; --panel:#1b2022; --sunk:#232a2c; --ink:#e6ebe8; --mute:#97a2a4; --line:#2f373a;
+    --accent:#e08a55; --accent-2:#f0a270; --accent-soft:#3a2517;
+    --ok:#62c48b; --ok-soft:#173424; --ng:#f07565; --ng-soft:#3d1c18; --warn:#e3b54f; --warn-soft:#3a2d12;
+    --cu:#d08048; --cu-hi:#eeaa78;
+    --c-blk:#0c0e0f; --c-wht:#e9e9e3; --c-red:#d2493c; --c-grn:#3f9d5a; --c-blu:#4d7cc6; --c-yel:#d8b23a;
+    --sh-cv:#0f1213; --sh-vv:#9a9e98; --sh-eco:#c9c6bb; --sh-cab:#5f6568; --semi:#3b4144;
+    --xs-stroke:#8e999c; --bar-bg:#2b3336; --bar-fg:#e6ebe8;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131719; --panel:#1b2022; --sunk:#232a2c; --ink:#e6ebe8; --mute:#97a2a4; --line:#2f373a;
+  --accent:#e08a55; --accent-2:#f0a270; --accent-soft:#3a2517;
+  --ok:#62c48b; --ok-soft:#173424; --ng:#f07565; --ng-soft:#3d1c18; --warn:#e3b54f; --warn-soft:#3a2d12;
+  --cu:#d08048; --cu-hi:#eeaa78;
+  --c-blk:#0c0e0f; --c-wht:#e9e9e3; --c-red:#d2493c; --c-grn:#3f9d5a; --c-blu:#4d7cc6; --c-yel:#d8b23a;
+  --sh-cv:#0f1213; --sh-vv:#9a9e98; --sh-eco:#c9c6bb; --sh-cab:#5f6568; --semi:#3b4144;
+  --xs-stroke:#8e999c; --bar-bg:#2b3336; --bar-fg:#e6ebe8;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.6;-webkit-text-size-adjust:100%}
+.app{max-width:1200px;margin:0 auto;padding-inline:16px;padding-block:12px 40px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2{text-wrap:balance;margin:0}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+
+/* ヘッダー */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;padding-block:8px 16px}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:40px;height:40px;flex:none}
+.brand h1{font-size:1.35rem;font-weight:900;letter-spacing:.02em}
+.brand .sub{margin:0;color:var(--mute);font-size:.8rem}
+.tabs{display:flex;background:var(--sunk);border-radius:999px;padding:4px;gap:2px}
+.tabs button{border:0;background:none;padding:8px 16px;border-radius:999px;cursor:pointer;font-weight:700;font-size:.9rem;color:var(--mute);white-space:nowrap}
+.tabs button[aria-selected="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+/* 2カラム */
+.layout{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.layout{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.cond{display:flex;flex-direction:column;gap:16px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px)}
+@media (max-width:860px){.cond{position:static}}
+.main{display:flex;flex-direction:column;gap:16px;min-width:0}
+.panel h2{font-size:.95rem;font-weight:700;margin-bottom:10px}
+
+/* 入力部品 */
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.lbl{font-size:.78rem;font-weight:700;color:var(--mute);letter-spacing:.06em}
+.lbl .hint{font-weight:500;letter-spacing:0;color:var(--accent)}
+select,input[type=number],input[type=text]{width:100%;min-height:42px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:16px}
+select{cursor:pointer}
+.typepick{display:flex;flex-direction:column;gap:10px}
+.tgroup .gname{font-size:.72rem;color:var(--mute);margin-bottom:4px}
+.tchips{display:flex;flex-wrap:wrap;gap:6px}
+.tchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:5px 9px;cursor:pointer;font-size:.85rem;font-weight:700;line-height:1.3}
+.tchip i{width:10px;height:10px;border-radius:50%;flex:none;border:1px solid var(--xs-stroke)}
+.tchip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent)}
+.tname{font-size:.8rem;color:var(--mute);margin-top:2px}
+.seg{display:flex;flex-wrap:wrap;background:var(--sunk);border-radius:8px;padding:3px;gap:3px}
+.seg button{flex:1 1 auto;border:0;background:none;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:700;color:var(--mute);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14)}
+.stepper{display:flex;gap:6px}
+.stepper input{text-align:center;font-family:var(--f-num)}
+.stepper button{flex:none;width:42px;border:1px solid var(--line);background:var(--panel);border-radius:8px;cursor:pointer;font-size:1.1rem;font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips button{border:1px solid var(--line);background:none;border-radius:999px;padding:3px 10px;font-size:.78rem;cursor:pointer;font-family:var(--f-num)}
+.chips button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:700}
+.small{font-size:.78rem;color:var(--mute)}
+
+/* 結果ヒーロー */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center}
+@media (max-width:520px){.hero{grid-template-columns:minmax(0,1fr)}.xsec{justify-self:center}}
+.eyebrow{font-size:.8rem;color:var(--mute);font-weight:700;letter-spacing:.04em}
+.big{display:flex;align-items:baseline;gap:6px;line-height:1;margin:8px 0 6px}
+.big .v{font-family:var(--f-num);font-weight:700;font-size:clamp(3.2rem,9vw,5rem);letter-spacing:-.03em;color:var(--accent)}
+.big .u{font-family:var(--f-num);font-size:1.6rem;font-weight:700;color:var(--mute)}
+.r-sub{font-size:.85rem;color:var(--mute)}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pill{display:inline-block;font-size:.75rem;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--sunk);color:var(--mute)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.ng{background:var(--ng-soft);color:var(--ng)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.cu{background:var(--accent-soft);color:var(--accent)}
+.xsec{margin:0;display:flex;flex-direction:column;align-items:center;gap:4px}
+.xsec svg{width:132px;height:132px;background:var(--sunk);border-radius:50%}
+.xsec figcaption{font-size:.7rem;color:var(--mute)}
+
+/* 計算の内訳 */
+.steps{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:0;margin:0;padding:0;list-style:none}
+.steps li{display:contents}
+.steps .op,.steps .desc,.steps .val{padding:9px 0;border-top:1px solid var(--line)}
+.steps li:first-child>*{border-top:0}
+.steps .op{font-family:var(--f-num);font-weight:700;color:var(--accent);font-size:1.05rem}
+.steps .desc{min-width:0}
+.steps .desc b{font-weight:700}
+.steps .desc small{display:block;color:var(--mute);font-size:.78rem}
+.steps .val{font-family:var(--f-num);font-weight:700;text-align:right;padding-left:12px;white-space:nowrap}
+.steps li.total>*{border-top:2px solid var(--ink)}
+.steps li.total .val{color:var(--accent);font-size:1.15rem}
+
+/* 表 */
+.tbl-wrap{overflow-x:auto;margin-inline:-4px;padding-inline:4px}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font-size:.74rem;color:var(--mute);font-weight:700;background:var(--sunk);position:sticky;top:0}
+th:first-child,td:first-child{text-align:left}
+td{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+td.jp{font-family:var(--f-body)}
+tr.sel td{background:var(--accent-soft);font-weight:700}
+tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+tr.pick td{background:var(--ok-soft);font-weight:700}
+tr.pick td:first-child{box-shadow:inset 3px 0 0 var(--ok)}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:var(--sunk)}
+td.dim{color:var(--mute)}
+.thgroup th{background:var(--panel);text-align:center;border-bottom:0}
+
+/* 選定 */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.verdict{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.kv{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kv .k{font-size:.74rem;color:var(--mute);font-weight:700}
+.kv .v{font-family:var(--f-num);font-size:1.5rem;font-weight:700;line-height:1.2}
+.kv .v small{font-size:.9rem;color:var(--mute);margin-left:3px}
+.kv .d{font-size:.78rem;color:var(--mute)}
+.kv.main .v{color:var(--ok);font-size:1.9rem}
+.kv.bad .v{color:var(--ng)}
+
+.notes{font-size:.85rem;color:var(--mute)}
+.notes p{margin:0 0 6px}
+.notes b{color:var(--ink)}
+.foot{margin-top:24px;font-size:.75rem;color:var(--mute);max-width:70ch}
+.foot p{margin:0 0 4px}
+.check{display:flex;align-items:center;gap:8px;font-size:.85rem;cursor:pointer}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+@media (prefers-reduced-motion:no-preference){.big .v{transition:color .2s}}
+body{margin:0}
+/* スマホ: 画面下に結果を常に表示 */
+.mbar{display:none}
+@media (max-width:860px){
+  .mbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:10;align-items:center;gap:12px;
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:var(--bar-bg);color:var(--bar-fg);border:0;
+    font:inherit;text-align:left;cursor:pointer;box-shadow:0 -2px 12px rgba(0,0,0,.18)}
+  .mbar[hidden]{display:none}
+  .mbar .mb-t{flex:1;min-width:0;font-size:.78rem;line-height:1.35;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .mbar .mb-v{font-family:var(--f-num);font-weight:700;font-size:1.7rem;color:var(--bar-acc);white-space:nowrap}
+  .mbar .mb-v small{font-size:.9rem;margin-left:2px;color:var(--bar-fg)}
+  .mbar .mb-go{font-size:.72rem;opacity:.75;white-space:nowrap}
+  .app{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+}
+</style>
+
+<div class="app">
+<header class="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="19" fill="var(--sh-cv)"/>
+      <circle cx="20" cy="12.5" r="6.2" fill="var(--c-blk)" stroke="var(--xs-stroke)" stroke-width=".6"/><circle cx="20" cy="12.5" r="3.6" fill="var(--cu)"/>
+      <circle cx="13.5" cy="24.2" r="6.2" fill="var(--c-wht)"/><circle cx="13.5" cy="24.2" r="3.6" fill="var(--cu)"/>
+      <circle cx="26.5" cy="24.2" r="6.2" fill="var(--c-red)"/><circle cx="26.5" cy="24.2" r="3.6" fill="var(--cu)"/>
+    </svg>
+    <div><h1>電線許容電流計算機</h1><p class="sub">電技解釈 第146条 ／ JCS 0168 の値で計算</p></div>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="機能">
+    <button role="tab" id="tab-calc" data-tab="calc" aria-selected="true">許容電流</button>
+    <button role="tab" id="tab-select" data-tab="select" aria-selected="false">負荷から選定</button>
+    <button role="tab" id="tab-table" data-tab="table" aria-selected="false">早見表</button>
+  </nav>
+</header>
+
+<main class="layout">
+  <aside class="panel cond" aria-label="電線と布設の条件">
+    <div class="field">
+      <div class="lbl">電線の種類</div>
+      <div id="typepick" class="typepick"></div>
+      <div class="tname" id="tname"></div>
+    </div>
+    <div class="field" id="f-size">
+      <label class="lbl" for="size">サイズ</label>
+      <select id="size"></select>
+    </div>
+    <div class="field" id="f-method">
+      <div class="lbl">算定方式</div>
+      <div class="seg" id="method"></div>
+    </div>
+    <div class="field" id="f-cores">
+      <div class="lbl">心数</div>
+      <div class="seg" id="cores"></div>
+    </div>
+    <div class="field" id="f-lay">
+      <div class="lbl">布設方法</div>
+      <div class="seg" id="lay"></div>
+      <select id="lay-sel" aria-label="布設方法" hidden></select>
+    </div>
+    <div class="field" id="f-n">
+      <label class="lbl" for="n"><span id="n-label">同一管内の電線数</span> <span class="hint" id="n-hint"></span></label>
+      <div class="stepper"><button type="button" data-step="n" data-d="-1" aria-label="減らす">−</button><input id="n" type="number" inputmode="numeric" min="1" max="200"><button type="button" data-step="n" data-d="1" aria-label="増やす">＋</button></div>
+    </div>
+    <div class="field" id="f-temp">
+      <label class="lbl" for="temp"><span id="temp-label">周囲温度</span> (℃)</label>
+      <div class="stepper"><button type="button" data-step="temp" data-d="-1" aria-label="下げる">−</button><input id="temp" type="number" inputmode="decimal" min="-10" max="80"><button type="button" data-step="temp" data-d="1" aria-label="上げる">＋</button></div>
+      <div class="chips" id="temp-chips"></div>
+    </div>
+    <div class="field" id="f-multi">
+      <label class="lbl" for="multi">多条布設の低減率</label>
+      <select id="multi"></select>
+      <input id="multi-custom" type="number" inputmode="decimal" step="0.01" min="0.1" max="1" aria-label="低減率を直接入力" hidden>
+    </div>
+  </aside>
+
+  <section class="main">
+    <!-- 許容電流 -->
+    <div id="view-calc" class="main">
+      <div class="panel hero">
+        <div>
+          <div class="eyebrow" id="r-title"></div>
+          <div class="big"><span class="v" id="r-val">–</span><span class="u">A</span></div>
+          <div class="r-sub" id="r-sub"></div>
+          <div class="pills" id="r-pills"></div>
+        </div>
+        <figure class="xsec"><svg id="xsec" viewBox="0 0 120 120" role="img" aria-label="電線の断面"></svg><figcaption id="xsec-cap"></figcaption></figure>
+      </div>
+      <div class="panel">
+        <h2>計算の内訳</h2>
+        <ol class="steps" id="r-steps"></ol>
+      </div>
+      <div class="panel">
+        <h2 id="r-all-h">同じ条件での全サイズ</h2>
+        <div class="tbl-wrap"><table id="r-all"></table></div>
+      </div>
+      <div class="panel notes" id="r-notes"></div>
+    </div>
+
+    <!-- 負荷から選定 -->
+    <div id="view-select" class="main" hidden>
+      <div class="panel">
+        <h2>負荷と配線の条件</h2>
+        <div class="form-grid">
+          <div class="field"><label class="lbl" for="sys">電気方式</label><select id="sys"></select></div>
+          <div class="field"><div class="lbl">入力のしかた</div><div class="seg" id="inmode"></div></div>
+          <div class="field"><label class="lbl" for="load" id="load-label">負荷電流 (A)</label><input id="load" type="number" inputmode="decimal" min="0" step="any"></div>
+          <div class="field" id="f-pf"><label class="lbl" for="pf">力率</label><input id="pf" type="number" inputmode="decimal" min="0.1" max="1" step="0.01"></div>
+          <div class="field"><div class="lbl">負荷の種類</div><div class="seg" id="lkind"></div></div>
+          <div class="field"><label class="lbl" for="len">こう長 (m)</label><input id="len" type="number" inputmode="decimal" min="0" step="any"></div>
+          <div class="field"><label class="lbl" for="vd">許容電圧降下 (%)</label><input id="vd" type="number" inputmode="decimal" min="0.1" max="20" step="0.1"></div>
+        </div>
+        <label class="check" style="margin-top:12px"><input type="checkbox" id="bkchk"> 配線用遮断器の定格以上の許容電流を条件にする</label>
+      </div>
+      <div class="panel verdict" id="s-verdict"></div>
+      <div class="panel">
+        <h2>サイズ別の判定</h2>
+        <div class="tbl-wrap"><table id="s-table"></table></div>
+      </div>
+      <div class="panel notes" id="s-notes"></div>
+    </div>
+
+    <!-- 早見表 -->
+    <div id="view-table" class="main" hidden>
+      <div class="panel">
+        <h2 id="t-h"></h2>
+        <p class="small" id="t-sub" style="margin:0 0 10px"></p>
+        <div class="tbl-wrap"><table id="t-table"></table></div>
+      </div>
+      <div class="panel" id="t-temp-panel">
+        <h2>周囲温度による補正係数</h2>
+        <div class="tbl-wrap"><table id="t-temp"></table></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>計算値は電技解釈・JCS 0168・メーカーカタログの表をもとにした目安です。実際の選定では、内線規程と採用メーカーのカタログで最終確認してください。</p>
+  <p id="foot-src"></p>
+</footer>
+<button type="button" class="mbar" id="mbar" aria-label="結果へ移動"><span class="mb-t" id="mb-t"></span><span class="mb-v" id="mb-v"></span><span class="mb-go">結果 ↓</span></button>
+</div>
+
+<script>
+(function(){
+'use strict';
+// ===== データ =====
+// 電技解釈 第146条(令和6年10月22日改正版で確認)
+// 146-1表 単線 [直径の下限mm, 軟銅線A]
+const K_SOLID = [[1.0, 16], [1.2, 19], [1.6, 27], [2.0, 35], [2.6, 48], [3.2, 62], [4.0, 81], [5.0, 107]];
+// 146-2表 成形単線・より線 [断面積の下限mm², 軟銅線A]
+const K_STR = [[0.9, 17], [1.25, 19], [2, 27], [3.5, 37], [5.5, 49], [8, 61], [14, 88], [22, 115], [30, 139], [38, 162], [50, 190], [60, 217], [80, 257], [100, 298], [125, 344], [150, 395], [200, 469], [250, 556], [325, 650], [400, 745], [500, 842], [600, 930], [800, 1080], [1000, 1260]];
+// 146-3表 許容電流補正係数 = mult × √((T − θ) ÷ 30)、θは30℃以下なら30
+const INSUL = {
+  pvc:  {t: 60, mult: 1, short: 'ビニル', name: 'ビニル混合物(耐熱性を除く)'},
+  pe75: {t: 75, mult: 1, short: '耐熱ビニル・PE', name: '耐熱ビニル混合物、ポリエチレン混合物(架橋を除く)'},
+  ep:   {t: 80, mult: 1, short: 'EPゴム', name: 'エチレンプロピレンゴム混合物'},
+  xlpe: {t: 90, mult: 1, short: '架橋PE', name: '架橋ポリエチレン混合物'},
+  fl:   {t: 90, mult: 0.9, short: 'ふっ素樹脂', name: 'ふっ素樹脂混合物(一般の場所)'},
+  si:   {t: 90, mult: 1, short: 'けい素ゴム', name: 'けい素ゴム混合物(一般の場所)'}
+};
+// 146-4表 電流減少係数 [電線数の上限, 係数, 区分]
+const K_RED = [[3, 0.70, '3本以下'], [4, 0.63, '4本'], [6, 0.56, '5〜6本'], [15, 0.49, '7〜15本'], [40, 0.43, '16〜40本'], [60, 0.39, '41〜60本'], [Infinity, 0.34, '61本以上']];
+const K_NOTE = '146条の計算は絶縁電線(ビニル・ポリエチレン・ふっ素樹脂・ゴム)が対象で、解釈には端数処理の規定がないため小数第1位まで表示します。';
+
+// 内線規程の許容電流表(周囲30℃)。列 = [がいし引き, 3本以下, 4, 5〜6, 7〜15, 16〜40, 41〜60, 61本以上]
+// 出典: 内線規程2005/2012の転載(国交省近畿地整 設計便覧・平新カタログ)、昭和電線 技術資料
+const NWT = {
+  IV: {T: 60, name: '内線規程 IV 許容電流表', rows: {
+    'd1.6': [27, 19, 17, 15, 13, 12, 11, 9], 'd2.0': [35, 24, 22, 19, 17, 15, 14, 12], 'd2.6': [48, 33, 30, 27, 23, 21, 19, 17], 'd3.2': [62, 43, 38, 34, 30, 27, 24, 21],
+    'a2': [27, 18, 17, 15, 13, 11, 10, 9], 'a3.5': [37, 25, 23, 20, 18, 15, 14, 12], 'a5.5': [49, 34, 31, 27, 24, 21, 19, 16], 'a8': [61, 42, 38, 34, 30, 26, 24, 21],
+    'a14': [88, 61, 55, 49, 43, 38, 34, 30], 'a22': [115, 80, 72, 64, 56, 49, 45, 39], 'a38': [162, 113, 102, 90, 79, 70, 63, 55], 'a60': [217, 152, 136, 121, 106, 93, 85, 74],
+    'a100': [298, 208, 187, 167, 146, 128, 116, 101], 'a150': [395, 276, 249, 221, 193, 170, 154, 134], 'a200': [469, 328, 295, 262, 230, 202, 183, 159],
+    'a250': [556, 389, 350, 311, 272, 239, 217, 189], 'a325': [650, 455, 409, 364, 318, 280, 254, 221], 'a400': [745, 521, 469, 417, 365, 320, 291, 253], 'a500': [842, 589, 530, 471, 412, 362, 328, 286]
+  }},
+  HIV: {T: 75, name: '内線規程 HIV(EM-IE)許容電流表', rows: {
+    'd1.6': [33, 23, 20, 18, 16, 14, 13, 11], 'd2.0': [42, 29, 26, 23, 20, 18, 16, 14], 'd2.6': [58, 40, 36, 32, 28, 25, 22, 19], 'd3.2': [75, 52, 47, 42, 36, 32, 29, 25],
+    'a2': [33, 23, 20, 18, 16, 14, 13, 11], 'a3.5': [45, 31, 28, 25, 22, 19, 17, 15], 'a5.5': [59, 41, 37, 33, 29, 25, 23, 20], 'a8': [74, 52, 46, 41, 36, 32, 29, 25],
+    'a14': [107, 75, 67, 60, 52, 46, 41, 36], 'a22': [140, 98, 88, 78, 68, 60, 54, 47], 'a38': [197, 138, 124, 110, 96, 84, 77, 67], 'a60': [264, 185, 166, 148, 129, 113, 103, 89],
+    'a100': [363, 254, 228, 203, 178, 156, 141, 123], 'a150': [482, 337, 303, 270, 236, 207, 188, 164], 'a200': [572, 400, 360, 320, 280, 246, 223, 194],
+    'a250': [678, 474, 427, 379, 332, 291, 264, 230], 'a325': [793, 555, 499, 444, 388, 341, 309, 269]
+  }}
+};
+const NW_NOTE = '内線規程の表の値をそのまま使います(表の値は計算で再現できないため)。中性線・接地線・制御回路用の電線は本数に数えません。金属ダクト等は「3本以下」の値を使います。周囲温度が30℃以外のときは √((T − θ) ÷ (T − 30)) を掛けて切り捨てます。';
+
+// 電線の種類
+const SZ_IV = ['d1.6', 'd2.0', 'd2.6', 'd3.2', 'a2', 'a3.5', 'a5.5', 'a8', 'a14', 'a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325', 'a400', 'a500'];
+const SZ_KIV = ['a1.25', 'a2', 'a3.5', 'a5.5', 'a8', 'a14', 'a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325'];
+const TYPES = [
+  {id: 'IV', cat: '絶縁電線', label: 'IV', name: '600V ビニル絶縁電線', kind: 'wire', ins: 'pvc', methods: ['NW:IV', 'K'], sizes: SZ_IV, defSize: 'a5.5', swatch: '--c-red', draw: {ins: '--c-red'},
+    desc: '絶縁体はビニル(最高許容温度60℃)。管や線ぴに収める屋内配線、盤の配線に使います。'},
+  {id: 'HIV', cat: '絶縁電線', label: 'HIV', name: '600V 二種ビニル絶縁電線', kind: 'wire', ins: 'pe75', methods: ['NW:HIV', 'K'], sizes: SZ_IV.slice(0, 17), defSize: 'a5.5', swatch: '--c-yel', draw: {ins: '--c-yel'},
+    desc: '耐熱ビニル(最高許容温度75℃)。IVより許容電流が大きく、消防用設備の耐熱配線にも使います。'},
+  {id: 'EM-IE', cat: '絶縁電線', label: 'EM-IE', name: '600V 耐燃性ポリエチレン絶縁電線(エコ電線)', kind: 'wire', ins: 'pe75', methods: ['NW:HIV', 'K'], sizes: SZ_IV.slice(0, 17), defSize: 'a5.5', swatch: '--c-blu', draw: {ins: '--c-blu'},
+    desc: 'ポリエチレン(最高許容温度75℃)。内線規程ではHIVと同じ表を使います。'},
+  {id: 'EM-IC', cat: '絶縁電線', label: 'EM-IC', name: '600V 耐燃性架橋ポリエチレン絶縁電線', kind: 'wire', ins: 'xlpe', methods: ['K'], sizes: SZ_IV.slice(0, 17), defSize: 'a5.5', swatch: '--c-grn', draw: {ins: '--c-grn'},
+    desc: '架橋ポリエチレン(最高許容温度90℃)。'},
+  {id: 'KIV', cat: '絶縁電線', label: 'KIV', name: '電気機器用ビニル絶縁電線', kind: 'wire', ins: 'pvc', methods: ['K'], sizes: SZ_KIV, defSize: 'a2', swatch: '--c-blk', draw: {ins: '--c-blk'},
+    desc: '柔らかいビニル絶縁電線(最高許容温度60℃)。盤内配線や機器の口出し線に使います。'},
+
+  {id: 'VVF', cat: '低圧ケーブル', label: 'VVF', name: '600V ビニル絶縁ビニルシースケーブル 平形', kind: 'cable', methods: ['T:VVF_J', 'T:VV_N'], only: ['d1.6', 'd2.0', 'd2.6'], defSize: 'd1.6', defCores: 2, swatch: '--sh-vv', draw: {shape: 'flat', sheath: '--sh-vv'},
+    desc: '住宅・店舗の屋内配線でいちばん使うケーブル。導体最高60℃。'},
+  {id: 'EM-EEF', cat: '低圧ケーブル', label: 'EM-EEF', name: '600V 耐燃性ポリエチレンシースケーブル 平形(エコケーブル)', kind: 'cable', methods: ['T:EEF_J'], defSize: 'd1.6', defCores: 2, swatch: '--sh-eco', draw: {shape: 'flat', sheath: '--sh-eco'},
+    desc: 'VVFのエコ仕様。導体最高75℃なので、VVFとは別の表(VVFより大きい値)です。'},
+  {id: 'VVR', cat: '低圧ケーブル', label: 'VVR', name: '600V ビニル絶縁ビニルシースケーブル 丸形', kind: 'cable', methods: ['T:VV_J', 'T:VV_N'], defSize: 'a5.5', defCores: 3, swatch: '--sh-vv', draw: {shape: 'round', sheath: '--sh-vv'},
+    desc: '丸形のVVケーブル。導体最高60℃。'},
+  {id: 'CV', cat: '低圧ケーブル', label: 'CV', name: '600V 架橋ポリエチレン絶縁ビニルシースケーブル', kind: 'cable', methods: ['T:CV'], defSize: 'a14', defCores: 3, swatch: '--sh-cv', draw: {shape: 'round', sheath: '--sh-cv'},
+    desc: '幹線・動力配線の標準ケーブル。導体最高90℃。CV-S(遮へい付)も同じ値です。'},
+  {id: 'CVT', cat: '低圧ケーブル', label: 'CVT', name: '600V CV トリプレックス形(単心3個より)', kind: 'cable', methods: ['T:CVT'], defSize: 'a38', swatch: '--sh-cv', draw: {shape: 'triplex', sheath: '--sh-cv'},
+    desc: '単心CVを3本より合わせたケーブル。3心CVより放熱がよく、許容電流が大きくなります。三相3線式の幹線に使います。'},
+  {id: 'CVD', cat: '低圧ケーブル', label: 'CVD', name: '600V CV デュプレックス形(単心2個より)', kind: 'cable', methods: ['T:CVD'], defSize: 'a38', swatch: '--sh-cv', draw: {shape: 'triplex', sheath: '--sh-cv'},
+    desc: '単心CVを2本より合わせたケーブル。単相2線式に使います。'},
+  {id: 'CVQ', cat: '低圧ケーブル', label: 'CVQ', name: '600V CV クワドルプレックス形(単心4個より)', kind: 'cable', methods: ['T:CVQ'], defSize: 'a38', swatch: '--sh-cv', draw: {shape: 'triplex', sheath: '--sh-cv'},
+    desc: '単心CVを4本より合わせたケーブル。三相4線式や接地線付きの幹線に使います。'},
+  {id: 'EM-CE', cat: '低圧ケーブル', label: 'EM-CE', name: '600V 架橋ポリエチレン絶縁耐燃性ポリエチレンシースケーブル(エコ)', kind: 'cable', methods: ['T:CV'], defSize: 'a14', defCores: 3, swatch: '--sh-cv', draw: {shape: 'round', sheath: '--sh-cv'},
+    desc: 'CVのエコ仕様。JCS 0168 によりCVと同じ値を使えます。'},
+  {id: 'EM-CET', cat: '低圧ケーブル', label: 'EM-CET', name: '600V EM-CE トリプレックス形(エコ)', kind: 'cable', methods: ['T:CVT'], defSize: 'a38', swatch: '--sh-cv', draw: {shape: 'triplex', sheath: '--sh-cv'},
+    desc: 'CVTのエコ仕様。JCS 0168 によりCVTと同じ値を使えます。'},
+
+  {id: 'CV66', cat: '高圧ケーブル', label: '6.6kV CV', name: '6600V 架橋ポリエチレン絶縁ビニルシースケーブル', kind: 'cable', methods: ['T:CV66'], defSize: 'a38', defCores: 3, swatch: '--semi', draw: {shape: 'round', sheath: '--sh-cv', hv: true},
+    desc: '高圧受電設備の引込・構内配電に使う、銅テープ遮へい付きのケーブル。3.3kV CVも同じ値。EM-6600V CE/Fも同じ値です。'},
+  {id: 'CVT66', cat: '高圧ケーブル', label: '6.6kV CVT', name: '6600V CV トリプレックス形', kind: 'cable', methods: ['T:CVT66'], defSize: 'a38', swatch: '--semi', draw: {shape: 'triplex', sheath: '--sh-cv', hv: true},
+    desc: '高圧の単心CVを3本より合わせたケーブル。高圧引込でいちばん使います。EM-6600V CET/Fも同じ値です。'},
+
+  {id: 'VCT', cat: 'キャブタイヤ', label: 'VCT', name: 'ビニルキャブタイヤケーブル', kind: 'cable', methods: ['T:VCT'], defSize: 'a2', defCores: 3, swatch: '--sh-cab', draw: {shape: 'round', sheath: '--sh-cab'},
+    desc: '移動用機器・仮設の電源に使う柔らかいケーブル。導体最高60℃。'},
+  {id: '2PNCT', cat: 'キャブタイヤ', label: '2PNCT', name: '2種クロロプレンキャブタイヤケーブル', kind: 'cable', methods: ['T:PNCT'], defSize: 'a3.5', defCores: 3, swatch: '--c-blk', draw: {shape: 'round', sheath: '--c-blk'},
+    desc: 'ゴム絶縁のキャブタイヤ。屋外・工事現場の移動電源に使います。導体最高80℃。'},
+
+  {id: 'OW', cat: '架空・引込・裸線', label: 'OW', name: '屋外用ビニル絶縁電線', kind: 'wire', methods: ['T:OW'], defSize: 'a22', swatch: '--c-blk', draw: {ins: '--c-blk'},
+    desc: '低圧架空配電線に使う絶縁電線。導体最高60℃。'},
+  {id: 'OE', cat: '架空・引込・裸線', label: 'OE', name: '屋外用ポリエチレン絶縁電線', kind: 'wire', methods: ['T:OE'], defSize: 'a38', swatch: '--c-blk', draw: {ins: '--c-blk'},
+    desc: '高圧架空配電線に使う絶縁電線。導体最高75℃。'},
+  {id: 'OC', cat: '架空・引込・裸線', label: 'OC', name: '屋外用架橋ポリエチレン絶縁電線', kind: 'wire', methods: ['T:OC'], defSize: 'a38', swatch: '--c-blk', draw: {ins: '--c-blk'},
+    desc: '高圧架空配電線に使う絶縁電線。導体最高90℃。'},
+  {id: 'DV', cat: '架空・引込・裸線', label: 'DV', name: '引込用ビニル絶縁電線', kind: 'cable', methods: ['T:DV'], defSize: 'd2.6', defCores: 2, swatch: '--c-blk', draw: {shape: 'triplex', sheath: '--c-blk', nosheath: true},
+    desc: '電柱から建物への低圧引込線。2個より(単相2線)・3個より(単相3線・三相)があります。'},
+  {id: 'HDCC', cat: '架空・引込・裸線', label: '硬銅より線', name: '硬銅より線(裸線)', kind: 'wire', methods: ['T:HDCC'], defSize: 'a38', swatch: '--cu', draw: {bare: true},
+    desc: '絶縁被覆のない硬銅線。架空の接地線・配電線に使います。'}
+];
+
+// 電気方式と電圧降下の係数(内線規程の簡略式 e = K·L·I ÷ 1000A)
+const SYS = [
+  {id: '1p2w100', name: '単相2線式 100V', ph: 1, vI: 100, vref: 100, K: 35.6},
+  {id: '1p2w200', name: '単相2線式 200V', ph: 1, vI: 200, vref: 200, K: 35.6},
+  {id: '1p3w', name: '単相3線式 100/200V', ph: 1, vI: 200, vref: 100, K: 17.8},
+  {id: '3p3w200', name: '三相3線式 200V', ph: 3, vI: 200, vref: 200, K: 30.8},
+  {id: '3p3w400', name: '三相3線式 400V', ph: 3, vI: 400, vref: 400, K: 30.8},
+  {id: '3p4w', name: '三相4線式 240/415V', ph: 3, vI: 415, vref: 240, K: 17.8}
+];
+// 配線用遮断器の標準定格(A)
+const BREAKERS = [15, 20, 30, 40, 50, 60, 75, 100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 500, 600, 700, 800, 1000, 1200];
+const SOURCES = '出典: 電気設備の技術基準の解釈(令和6年10月改正)第146・148・149条 ／ 内線規程(JEAC 8001)許容電流表 ／ JCS 0168 電力ケーブルの許容電流 ／ 各電線メーカーのカタログ';
+
+// 表で引く方式(JCS 0168・メーカーカタログ・内線規程のケーブル表)
+// JT[key] = {name, short, tmax(導体最高℃), tAir(気中の基底℃), tGnd(地中の基底℃), note, cores:{心数: {sizes, cnote, lays:[[id, 名前, 地中?, 値[], 多条低減を掛けられるか]]}}}
+// 出典キー SW=昭和電線 技術資料、YZ=矢崎、FDC=フジクラ・ダイヤケーブル、KEC=北日本電線、HST=住電HST、FUJI=富士電線
+const L = (id, name, g, vals, m) => [id, name, g, vals, !!m];
+const SZ_CV = ['a2', 'a3.5', 'a5.5', 'a8', 'a14', 'a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325'];
+const SZ_CV1 = SZ_CV.concat(['a400', 'a500']);
+const SZ_CVT = ['a8', 'a14', 'a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325', 'a400', 'a500'];
+const SZ_VV = ['d1.6', 'd2.0', 'd2.6', 'd3.2', 'a2', 'a3.5', 'a5.5', 'a8', 'a14', 'a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325'];
+const SZ_CAB = ['a0.75', 'a1.25', 'a2', 'a3.5', 'a5.5', 'a8', 'a14', 'a22', 'a38', 'a60', 'a100'];
+const _ = null;
+const GND = '直埋・管路は基底地中温度25℃、土壌熱抵抗100℃·cm/W、埋設深さ1.4m、損失率1.0の条件です。';
+
+// 600V CV 2心・3心の布設(値は [2心, 3心])
+const CV_MC = {
+  2: {
+    air: [28, 39, 52, 65, 91, 120, 170, 225, 310, 400, 485, 560, 660],
+    conduit: [23, 31, 41, 51, 70, 93, 135, 175, 245, 320, 390, 455, 540],
+    dir: [39, 54, 69, 85, 115, 150, 205, 260, 345, 435, 505, 570, 650],
+    dir2: [33, 45, 58, 70, 96, 120, 165, 215, 285, 355, 415, 465, 530],
+    dir3: [28, 39, 50, 61, 82, 105, 140, 180, 240, 305, 355, 395, 455],
+    dir4: [26, 35, 45, 55, 74, 95, 125, 165, 215, 275, 320, 355, 410],
+    duct: [28, 40, 52, 64, 88, 115, 160, 210, 280, 355, 420, 475, 550],
+    duct2: [27, 38, 49, 60, 83, 105, 145, 190, 255, 325, 380, 430, 495],
+    duct3: [26, 36, 46, 57, 78, 100, 135, 180, 235, 295, 350, 390, 450],
+    duct4: [25, 35, 45, 55, 75, 98, 130, 170, 225, 285, 330, 370, 425]
+  },
+  3: {
+    air: [23, 33, 44, 54, 76, 100, 140, 190, 260, 340, 410, 470, 555],
+    conduit: [19, 26, 35, 43, 59, 77, 110, 150, 210, 265, 335, 380, 450],
+    dir: [32, 45, 58, 71, 97, 125, 170, 215, 285, 360, 420, 470, 540],
+    dir2: [27, 37, 48, 58, 80, 100, 135, 175, 235, 295, 340, 385, 440],
+    dir3: [23, 32, 41, 50, 68, 87, 115, 150, 200, 250, 290, 325, 375],
+    dir4: [21, 29, 37, 45, 61, 79, 105, 135, 180, 225, 265, 295, 335],
+    duct: [24, 33, 43, 53, 74, 97, 130, 170, 230, 295, 350, 395, 455],
+    duct2: [22, 31, 41, 50, 69, 90, 120, 160, 210, 270, 315, 355, 410],
+    duct3: [21, 30, 39, 47, 65, 84, 115, 145, 195, 245, 290, 325, 370],
+    duct4: [21, 29, 37, 46, 63, 81, 110, 140, 185, 235, 275, 305, 350]
+  }
+};
+// 多心・トリプレックス共通の布設の並び
+const LAY_MC = v => [
+  L('air', '気中・暗きょ 1条', 0, v.air, 1), L('conduit', '気中の電線管 1条', 0, v.conduit),
+  L('dir', '直埋 1条', 1, v.dir), L('dir2', '直埋 2条', 1, v.dir2), L('dir3', '直埋 3条', 1, v.dir3), L('dir4', '直埋 4条', 1, v.dir4),
+  L('duct', '管路 2孔1条', 1, v.duct), L('duct2', '管路 2孔2条', 1, v.duct2), L('duct3', '管路 4孔3条', 1, v.duct3), L('duct4', '管路 4孔4条', 1, v.duct4)
+];
+// 600V CVT・CVD(8mm²でメーカー差がある値は小さい方を採用)
+const CVT_V = {
+  air: [62, 86, 110, 155, 210, 290, 380, 465, 535, 635, 725, 835],
+  conduit: [45, 63, 82, 110, 150, 215, 275, 340, 395, 475, 535, 615],
+  dir: [77, 100, 130, 180, 230, 305, 380, 445, 500, 570, 635, 705],
+  dir2: [62, 84, 105, 145, 185, 245, 305, 360, 400, 460, 510, 565],
+  dir3: [53, 71, 91, 120, 155, 205, 255, 300, 335, 385, 430, 475],
+  dir4: [47, 64, 82, 110, 140, 185, 230, 270, 305, 345, 385, 435],
+  duct: [59, 81, 105, 145, 185, 250, 320, 380, 430, 500, 560, 645],
+  duct2: [55, 75, 97, 130, 170, 225, 285, 340, 380, 440, 490, 565],
+  duct3: [52, 70, 91, 120, 155, 210, 260, 310, 345, 395, 440, 505],
+  duct4: [50, 67, 87, 115, 150, 200, 250, 290, 325, 375, 415, 475]
+};
+const CVD_V = {
+  air: [66, 91, 120, 165, 225, 310, 400, 490, 565, 670, 765, 880],
+  conduit: [48, 69, 92, 125, 165, 230, 310, 370, 435, 505, 580, 675],
+  dir: [87, 120, 155, 210, 270, 360, 450, 525, 590, 675, 750, 830],
+  dir2: [73, 100, 125, 170, 220, 290, 365, 425, 480, 550, 605, 675],
+  dir3: [63, 85, 105, 145, 185, 245, 310, 360, 405, 465, 515, 570],
+  dir4: [56, 76, 98, 130, 165, 220, 275, 325, 365, 415, 460, 515],
+  duct: [65, 90, 115, 160, 210, 285, 360, 430, 490, 570, 635, 715],
+  duct2: [61, 84, 110, 150, 195, 260, 330, 390, 440, 505, 565, 635],
+  duct3: [58, 80, 100, 140, 180, 240, 300, 355, 400, 460, 515, 575],
+  duct4: [55, 77, 100, 135, 175, 230, 290, 340, 380, 440, 485, 545]
+};
+const CV_NOTE = 'JCS 0168 の値(昭和電線・矢崎・フジクラ・北日本電線のカタログで一致を確認)。気中・暗きょは周囲40℃、' + GND + '導体最高90℃。エコケーブル(EM-CE・EM-CET・EM-CED)も同じ値を使えます(JCS 0168-2 の注記)。';
+
+const JT = {
+  CV: {name: 'JCS 0168 600V CV 許容電流表', short: 'JCS 0168', tmax: 90, tAir: 40, tGnd: 25, note: CV_NOTE, cores: {
+    1: {sizes: SZ_CV1, cnote: '単心の値は3条(三相1回線分)で布設した場合です。管路は100mm²以上のみ表にあります。', lays: [
+      L('air', '気中・暗きょ 3条 S=2d', 0, [31, 44, 58, 72, 100, 130, 190, 255, 355, 455, 545, 620, 725, 815, 920], 1),
+      L('airT', '気中・暗きょ 3条俵積み', 0, [27, 38, 50, 63, 87, 115, 160, 210, 290, 380, 470, 540, 640, 730, 840]),
+      L('dir', '直埋 3条平積み', 1, [38, 52, 66, 81, 110, 140, 190, 245, 325, 405, 470, 525, 605, 670, 745]),
+      L('dir6', '直埋 6条', 1, [30, 41, 52, 63, 85, 105, 145, 185, 250, 310, 360, 405, 465, 515, 575]),
+      L('dir9', '直埋 9条', 1, [26, 35, 45, 54, 73, 94, 125, 160, 215, 265, 310, 350, 400, 440, 495]),
+      L('duct3', '管路 4孔3条', 1, [_, _, _, _, _, _, _, _, 310, 390, 460, 520, 600, 670, 750]),
+      L('duct6', '管路 6孔6条', 1, [_, _, _, _, _, _, _, _, 270, 340, 395, 445, 510, 570, 635]),
+      L('duct9', '管路 9孔9条', 1, [_, _, _, _, _, _, _, _, 245, 305, 360, 400, 460, 510, 570])
+    ]},
+    2: {sizes: SZ_CV, lays: LAY_MC(CV_MC[2])},
+    3: {sizes: SZ_CV, lays: LAY_MC(CV_MC[3])},
+    4: {sizes: SZ_CV, lays: LAY_MC(CV_MC[3]), cnote: '4心は1心を中性線・接地線に使う場合として3心の値を使います(フジクラ・昭和電線の注記)。4心すべてに電流を流す場合は別途確認してください。'}
+  }},
+  CVT: {name: 'JCS 0168 600V CVT 許容電流表', short: 'JCS 0168', tmax: 90, tAir: 40, tGnd: 25, note: CV_NOTE + ' 8mm²はメーカーで1〜2A差があるため小さい方の値です。', cores: {
+    3: {sizes: SZ_CVT, lays: LAY_MC(CVT_V)}
+  }},
+  CVD: {name: 'JCS 0168 600V CVD 許容電流表', short: 'JCS 0168', tmax: 90, tAir: 40, tGnd: 25, note: CV_NOTE + ' CVD(単心2個より)は単相2線式に使います。8mm²はメーカー差があるため小さい方の値です。', cores: {
+    2: {sizes: SZ_CVT, lays: LAY_MC(CVD_V)}
+  }},
+  CVQ: {name: 'JCS 0168 600V CVQ 許容電流表', short: 'JCS 0168', tmax: 90, tAir: 40, tGnd: 25, note: CV_NOTE, cores: {
+    4: {sizes: SZ_CVT, lays: LAY_MC(CVT_V), cnote: 'CVQは1心を中性線・接地線に使う場合としてCVTの値を使います(住電HST・フジクラ・昭和電線の注記)。'}
+  }},
+  CV66: {name: 'JCS 0168 6600V CV 許容電流表', short: 'JCS 0168', tmax: 90, tAir: 40, tGnd: 25, note: 'JCS 0168 の値(昭和電線・フジクラ・住電HST・北日本電線などで一致を確認)。3300V CVも同じ値です。気中・暗きょは周囲40℃、' + GND + '導体最高90℃。', cores: {
+    1: {sizes: ['a8', 'a14', 'a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325', 'a400', 'a500', 'a600'], cnote: '単心の値は3条(三相1回線分)で布設した場合です。', lays: [
+      L('air', '気中・暗きょ 3条 S=2d', 0, [78, 105, 140, 195, 260, 355, 455, 540, 615, 720, 810, 930, 1040], 1),
+      L('dir', '直埋 3条平積み S=2d', 1, [82, 110, 140, 190, 250, 330, 415, 485, 545, 630, 705, 790, 865]),
+      L('duct', '管路 1孔1条', 1, [76, 100, 130, 180, 235, 310, 390, 455, 515, 595, 665, 745, 820])
+    ]},
+    3: {sizes: ['a8', 'a14', 'a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325'], lays: [
+      L('air', '気中・暗きょ 1条', 0, [61, 83, 105, 145, 195, 265, 345, 410, 470, 550], 1),
+      L('air2', '気中 2条 S=2d', 0, [57, 78, 99, 135, 185, 250, 325, 385, 445, 520]),
+      L('air2d', '気中 2条 S=d', 0, [51, 70, 89, 120, 165, 225, 290, 345, 395, 465]),
+      L('conduit', '気中の電線管 1条', 0, [52, 69, 89, 120, 160, 220, 285, 340, 400, 465]),
+      L('dir', '直埋 1条', 1, [70, 90, 120, 160, 210, 280, 350, 405, 455, 525]),
+      L('dir2', '直埋 2条', 1, [61, 80, 105, 140, 180, 240, 300, 350, 395, 450]),
+      L('duct', '管路 1孔1条', 1, [58, 79, 100, 135, 175, 235, 295, 350, 395, 465]),
+      L('duct2', '管路 2条', 1, [55, 73, 94, 125, 160, 215, 270, 315, 355, 420])
+    ]}
+  }},
+  CVT66: {name: 'JCS 0168 6600V CVT 許容電流表', short: 'JCS 0168', tmax: 90, tAir: 40, tGnd: 25, note: 'JCS 0168 の値(昭和電線・矢崎・フジクラ・北日本電線などで一致を確認)。気中・暗きょは周囲40℃、' + GND + '導体最高90℃。', cores: {
+    3: {sizes: ['a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325', 'a400', 'a500', 'a600'], lays: [
+      L('air', '気中・暗きょ 1条', 0, [120, 170, 225, 310, 405, 485, 560, 660, 750, 855, 950], 1),
+      L('air2', '気中 2条 S=2d', 0, [110, 160, 210, 290, 380, 460, 530, 625, 710, 810, 900]),
+      L('air2d', '気中 2条 S=d', 0, [100, 140, 190, 260, 340, 410, 475, 560, 635, 725, 805]),
+      L('conduit', '気中の電線管 1条', 0, [95, 130, 175, 235, 305, 370, 430, 500, 600, 675, 745]),
+      L('dir', '直埋 1条', 1, [135, 180, 235, 310, 390, 450, 510, 585, 650, 725, 785]),
+      L('dir2', '直埋 2条', 1, [110, 150, 195, 255, 320, 375, 420, 480, 535, 595, 650]),
+      L('dir3', '直埋 3条', 1, [99, 130, 165, 220, 275, 325, 360, 415, 465, 515, 560]),
+      L('duct', '管路 1孔1条', 1, [110, 155, 200, 270, 340, 400, 450, 530, 590, 665, 735]),
+      L('duct2', '管路 2条', 1, [100, 140, 180, 240, 305, 360, 405, 475, 530, 590, 655]),
+      L('duct3', '管路 3回線', 1, [92, 120, 160, 210, 260, 305, 345, 400, 445, 495, 545])
+    ]}
+  }},
+  VV_J: {name: 'JCS 0168 600V VV 許容電流表', short: 'JCS 0168', tmax: 60, tAir: 40, tGnd: 25, note: 'JCS 0168 の値(昭和電線・矢崎・北日本電線で一致を確認)。気中・暗きょは周囲40℃、' + GND + '導体最高60℃。', cores: {
+    1: {sizes: SZ_VV, cnote: '単心の値は3条(三相1回線分)で布設した場合です。', lays: [
+      L('air', '気中・暗きょ 3条 S=2d', 0, [20, 26, 36, 47, 20, 28, 37, 47, 66, 88, 120, 165, 230, 295, 350, 400, 470], 1),
+      L('dir', '直埋 3条平積み', 1, [29, 37, 49, 62, 28, 39, 50, 61, 83, 105, 140, 185, 245, 305, 355, 400, 455])
+    ]},
+    2: {sizes: SZ_VV, lays: [
+      L('air', '気中・暗きょ 1条', 0, [18, 23, 32, 42, 18, 25, 33, 42, 59, 78, 110, 145, 200, 255, 310, 355, 420], 1),
+      L('conduit', '気中の電線管 1条', 0, [14, 19, 26, 34, 15, 20, 27, 34, 46, 61, 88, 115, 160, 205, 250, 295, 345]),
+      L('dir', '直埋 1条', 1, [28, 37, 50, 63, 28, 40, 51, 63, 85, 110, 150, 195, 260, 325, 375, 425, 485]),
+      L('duct', '管路 2孔1条', 1, [21, 28, 38, 49, 21, 30, 39, 49, 67, 88, 120, 155, 210, 265, 315, 355, 410])
+    ]},
+    3: {sizes: SZ_VV, lays: [
+      L('air', '気中・暗きょ 1条', 0, [15, 20, 27, 36, 15, 21, 28, 36, 50, 66, 93, 120, 165, 220, 260, 300, 355], 1),
+      L('conduit', '気中の電線管 1条', 0, [12, 16, 22, 28, 12, 17, 23, 28, 39, 53, 73, 99, 135, 175, 215, 245, 290]),
+      L('dir', '直埋 1条', 1, [24, 31, 42, 53, 24, 33, 43, 53, 72, 92, 125, 160, 215, 270, 315, 350, 400]),
+      L('duct', '管路 2孔1条', 1, [18, 23, 32, 41, 18, 25, 33, 41, 56, 73, 100, 130, 175, 220, 265, 295, 340])
+    ]}
+  }},
+  VVF_J: {name: 'JCS 0168 VVF 許容電流表', short: 'JCS 0168(40℃)', tmax: 60, tAir: 40, tGnd: 25, note: 'JCS 0168 の値。周囲温度40℃・導体最高60℃が基準で、メーカーカタログに「VVFの許容電流」として載っている値です(昭和電線・矢崎・弘翔など5社で一致)。', cores: {
+    2: {sizes: ['d1.6', 'd2.0', 'd2.6'], lays: [L('air', '気中・暗きょ 1条', 0, [18, 23, 32], 1), L('conduit', '気中の電線管 1条', 0, [14, 19, 26])]},
+    3: {sizes: ['d1.6', 'd2.0', 'd2.6'], lays: [L('air', '気中・暗きょ 1条', 0, [15, 20, 27], 1), L('conduit', '気中の電線管 1条', 0, [12, 16, 22])]}
+  }},
+  EEF_J: {name: 'JCS 0168 EM-EEF 許容電流表', short: 'JCS 0168', tmax: 75, tAir: 40, tGnd: 25, note: 'JCS 0168 の値(昭和電線・矢崎で一致)。周囲温度40℃・導体最高75℃が基準です。導体温度が高いぶん、VVFより3割ほど大きくなります。', cores: {
+    2: {sizes: ['d1.6', 'd2.0', 'd2.6'], lays: [L('air', '気中・暗きょ 1条', 0, [24, 31, 44], 1), L('conduit', '気中の電線管 1条', 0, [19, 25, 35])]},
+    3: {sizes: ['d1.6', 'd2.0', 'd2.6'], lays: [L('air', '気中・暗きょ 1条', 0, [20, 26, 37], 1), L('conduit', '気中の電線管 1条', 0, [16, 21, 29])]}
+  }},
+  // 内線規程 VVケーブル3心以下 周囲30℃(内線規程2005・2012の転載2ソースで一致)
+  VV_N: {name: '内線規程 VVケーブル(3心以下)表', short: '内線規程(30℃)', tmax: 60, tAir: 30, tGnd: 25, note: '内線規程の「VVケーブル3心以下」の値(周囲30℃)。屈曲の少ない2m以下の電線管に収める場合もこの値を使います。2mm²・3.5mm²は表の転載で確認できていません。', cores: (() => {
+    const sizes = ['d1.6', 'd2.0', 'd2.6', 'd3.2', 'a5.5', 'a8', 'a14', 'a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325'];
+    const lays = [L('air', '露出・いんぺい', 0, [19, 24, 33, 43, 34, 42, 61, 80, 113, 150, 202, 269, 318, 367, 435])];
+    return {2: {sizes, lays}, 3: {sizes, lays}};
+  })()},
+  VCT: {name: 'JCS 0168 VCT 許容電流表', short: 'JCS 0168', tmax: 60, tAir: 30, tGnd: 25, note: 'JCS 0168 の値(富士電線・北日本電線で一致。単心は北日本電線のみ)。周囲温度30℃・気中1条・導体最高60℃が基準です。', cores: {
+    1: {sizes: SZ_CAB, lays: [L('air', '気中 1条', 0, [15, 20, 26, 38, 50, 61, 88, 120, 165, 225, 315], 1)]},
+    2: {sizes: SZ_CAB, lays: [L('air', '気中 1条', 0, [12, 17, 22, 32, 41, 51, 72, 97, 130, 175, 250], 1)]},
+    3: {sizes: SZ_CAB, lays: [L('air', '気中 1条', 0, [11, 15, 19, 27, 35, 43, 62, 83, 110, 150, 215], 1)]},
+    4: {sizes: SZ_CAB, cnote: '4心・5心は同じ値です。', lays: [L('air', '気中 1条', 0, [10, 13, 17, 25, 32, 39, 56, 75, 100, 135, 195], 1)]}
+  }},
+  PNCT: {name: 'JCS 0168 2PNCT 許容電流表', short: 'JCS 0168', tmax: 80, tAir: 30, tGnd: 25, note: '富士電線・橋本興産の値(周囲温度30℃・気中1条・導体最高80℃)。細いサイズの一部は1社のみの確認です。', cores: {
+    1: {sizes: SZ_CAB, lays: [L('air', '気中 1条', 0, [18, 25, 32, 47, 62, 77, 105, 145, 205, 280, 390], 1)]},
+    2: {sizes: SZ_CAB, lays: [L('air', '気中 1条', 0, [15, 21, 27, 39, 51, 63, 89, 120, 165, 220, 310], 1)]},
+    3: {sizes: SZ_CAB, lays: [L('air', '気中 1条', 0, [13, 18, 23, 33, 44, 54, 76, 100, 140, 185, 265], 1)]},
+    4: {sizes: SZ_CAB, lays: [L('air', '気中 1条', 0, [12, 16, 21, 30, 40, 49, 69, 93, 125, 170, 240], 1)]}
+  }},
+  OW: {name: '屋外用ビニル絶縁電線(OW)許容電流表', short: 'カタログ値', tmax: 60, tAir: 40, tGnd: 25, note: '矢崎・北日本電線の値。周囲40℃・日射0.1W/cm²・風速0.5m/s・導体最高60℃の条件です。', cores: {
+    1: {sizes: ['d2.6', 'd3.2', 'd4.0', 'd5.0', 'a14', 'a22', 'a38', 'a60', 'a100'], lays: [L('air', '架空', 0, [35, 45, 57, 73, 60, 78, 100, 130, 175])]}
+  }},
+  OE: {name: '屋外用ポリエチレン絶縁電線(OE)許容電流表', short: 'カタログ値', tmax: 75, tAir: 40, tGnd: 25, note: '矢崎の値。周囲40℃・日射0.1W/cm²・風速0.5m/s・導体最高75℃の条件です。', cores: {
+    1: {sizes: ['a22', 'a38', 'a60', 'a100'], lays: [L('air', '架空', 0, [120, 165, 220, 300])]}
+  }},
+  OC: {name: '屋外用架橋ポリエチレン絶縁電線(OC)許容電流表', short: 'カタログ値', tmax: 90, tAir: 40, tGnd: 25, note: '矢崎・北日本電線の値。周囲40℃・日射0.1W/cm²・風速0.5m/s・導体最高90℃の条件です。', cores: {
+    1: {sizes: ['d5.0', 'a22', 'a38', 'a60', 'a100', 'a125', 'a150'], lays: [L('air', '架空', 0, [140, 150, 210, 280, 390, 445, 505])]}
+  }},
+  DV: {name: '引込用ビニル絶縁電線(DV)許容電流表', short: 'カタログ値', tmax: 60, tAir: 30, tGnd: 25, note: '矢崎・北日本電線の値(周囲30℃)。8mm²は矢崎のみ、100mm²の3個よりは2社で差があるため小さい方の値です。', cores: {
+    2: {sizes: ['d2.0', 'd2.6', 'd3.2', 'a8', 'a14', 'a22', 'a38', 'a60', 'a100'], lays: [L('air', '架空', 0, [28, 38, 50, 50, 70, 92, 130, 174, 238])]},
+    3: {sizes: ['d2.0', 'd2.6', 'd3.2', 'a8', 'a14', 'a22', 'a38', 'a60', 'a100'], lays: [L('air', '架空', 0, [25, 34, 44, 44, 62, 80, 113, 152, 200])]}
+  }},
+  HDCC: {name: '硬銅より線(裸線)許容電流表', short: 'カタログ値', tmax: 90, tAir: 40, tGnd: 25, note: '矢崎の値(周囲40℃・日射0.1W/cm²・風速0.5m/s・導体最高90℃)。北日本電線の表は4〜5%大きく、原因は確認できていないため小さい方を採用しています。', cores: {
+    1: {sizes: ['a22', 'a38', 'a60', 'a100', 'a150', 'a200', 'a250', 'a325', 'a400'], lays: [L('air', '架空', 0, [159, 222, 301, 420, 547, 640, 751, 875, 1001])]}
+  }}
+};
+
+// 気中の多条布設の低減率(JCS 0168、昭和電線・北日本電線で一致) [係数, 表示]
+const MULTI_AIR = [
+  [1, '1条(低減なし)'],
+  [0.95, '1段 2〜3条 S=2d'], [0.90, '1段 6条 S=2d'], [0.80, '1段 7〜20条 S=2d'],
+  [0.85, '1段 2条 S=d'], [0.80, '1段 3条 S=d'], [0.70, '1段 6〜20条 S=d'],
+  [0.90, '2段 2〜3列 S=2d'], [0.85, '2段 4列 S=2d'], [0.72, '2段 6列 S=2d'], [0.70, '2段 8〜20列 S=2d'],
+  [0.70, '2段 2列 S=d'], [0.60, '2段 3〜4列 S=d'], [0.53, '2段 6列 S=d'], [0.50, '2段 8〜20列 S=d'],
+  [0.80, '3段 3〜4列 S=2d'], [0.66, '3段 6列 S=2d'], [0.60, '3段 20列 S=2d'],
+  [0.48, '3段 3列 S=d'], [0.41, '3段 4列 S=d'], [0.34, '3段 6列 S=d'], [0.30, '3段 9〜20列 S=d']
+];
+const MULTI_NOTE = '多条布設の低減率は、1条の値に掛ける係数です(S=ケーブルの配列間隔、d=ケーブル外径)。直埋・管路の多条は布設方法の選択肢(直埋2条、管路4孔4条など)で選んでください。';
+
+// ===== 計算エンジンと画面 =====
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const f2 = x => (Math.round(x * 100) / 100).toFixed(2);
+const f1 = x => (Math.round(x * 10) / 10).toFixed(1);
+
+const sizeLabel = k => k[0] === 'd' ? k.slice(1) + 'mm' : k.slice(1) + 'mm²';
+const sizeVal = k => parseFloat(k.slice(1));
+const sizeArea = k => k[0] === 'd' ? Math.PI * sizeVal(k) ** 2 / 4 : sizeVal(k);
+const coreName = c => c === 1 ? '単心' : c + '心';
+
+// ---- 電技解釈 第146条 ----
+function kBase(k) {
+  const v = sizeVal(k), tbl = k[0] === 'd' ? K_SOLID : K_STR;
+  let r = null;
+  for (const [lo, a] of tbl) if (v >= lo - 1e-9) r = a;
+  return r;
+}
+function kCorr(ins, th) {
+  const I = INSUL[ins], t = Math.max(th, 30);
+  return t >= I.t ? 0 : I.mult * Math.sqrt((I.t - t) / 30);
+}
+function kRedRow(n) { for (const r of K_RED) if (n <= r[0]) return r; return K_RED[K_RED.length - 1]; }
+
+// ---- 方式 ----
+// 'K' = 電技解釈146条の計算 / 'NW:表' = 内線規程の絶縁電線表 / 'T:表' = ケーブル等の表(JCS・カタログ・内線規程)
+const mk = m => m === 'K' ? 'K' : m.slice(0, m.indexOf(':'));
+const mref = m => m.slice(m.indexOf(':') + 1);
+function methodLabel(m) {
+  if (m === 'K') return '電技解釈146条';
+  if (mk(m) === 'NW') return '内線規程の表';
+  return JT[mref(m)].short;
+}
+
+// ---- 種類・状態 ----
+const TMAP = Object.fromEntries(TYPES.map(t => [t.id, t]));
+const DEF = {
+  tab: 'calc', type: 'IV', sizes: {}, method: {}, cores: {}, layK: 'conduit', layJ: 'air',
+  n: 3, temps: {}, multi: 1, multiIdx: 0, multiCustom: false,
+  sys: '3p3w200', inmode: 'A', load: 30, pf: 0.8, lkind: 'gen', len: 30, vd: 2, bkchk: true
+};
+const SKEY = 'kyoyo_denryu_v1';
+let S = JSON.parse(JSON.stringify(DEF));
+try { const o = JSON.parse(localStorage.getItem(SKEY) || 'null'); if (o && typeof o === 'object') S = Object.assign(S, o); } catch (e) {}
+if (!TMAP[S.type]) S.type = DEF.type;
+for (const k of ['sizes', 'method', 'cores', 'temps']) if (!S[k] || typeof S[k] !== 'object') S[k] = {};
+if (!MULTI_AIR[S.multiIdx]) S.multiIdx = 0;
+if (!S.multiCustom) S.multi = MULTI_AIR[S.multiIdx][0];
+function save() { try { localStorage.setItem(SKEY, JSON.stringify(S)); } catch (e) {} }
+
+const T = () => TMAP[S.type];
+function methodOf(t) { const m = S.method[t.id]; return t.methods.includes(m) ? m : t.methods[0]; }
+const kindOf = t => mk(methodOf(t));
+function JTof(t) { return JT[mref(methodOf(t))]; }
+function coreList(t) { return t.kind === 'wire' ? [] : Object.keys(JTof(t).cores).map(Number); }
+function coresOf(t) {
+  const list = coreList(t);
+  if (!list.length) return 1;
+  const c = S.cores[t.id];
+  return list.includes(c) ? c : (list.includes(t.defCores) ? t.defCores : list[0]);
+}
+function jtbl(t) { return JTof(t).cores[coresOf(t)]; }
+function sizesOf(t) {
+  const m = methodOf(t), k = mk(m);
+  if (k === 'K') return t.sizes;
+  if (k === 'NW') return t.sizes.filter(s => NWT[mref(m)].rows[s]);
+  return jtbl(t).sizes.filter(s => !t.only || t.only.includes(s));
+}
+function sizeOf(t) {
+  const list = sizesOf(t), s = S.sizes[t.id];
+  if (list.includes(s)) return s;
+  if (s) { // 一覧にないときは断面積の近いサイズ
+    const a = sizeArea(s); let best = list[0], bd = 1e9;
+    for (const k of list) { const d = Math.abs(Math.log(sizeArea(k) / a)); if (d < bd) { bd = d; best = k; } }
+    return best;
+  }
+  return t.defSize && list.includes(t.defSize) ? t.defSize : list[0];
+}
+function layOptions(t) {
+  if (kindOf(t) === 'T') {
+    return jtbl(t).lays.filter(l => l[3].some(v => v != null)).map(l => [l[0], l[1]]);
+  }
+  return [['open', 'がいし引き・露出'], ['conduit', '管・線ぴに収める']];
+}
+function layOf(t) {
+  const opts = layOptions(t).map(o => o[0]);
+  const l = kindOf(t) === 'T' ? S.layJ : S.layK;
+  return opts.includes(l) ? l : opts[0];
+}
+function layEntry(t, lay) { return kindOf(t) === 'T' ? jtbl(t).lays.find(l => l[0] === lay) : null; }
+function isGround(t, lay) { const e = layEntry(t, lay); return !!(e && e[2]); }
+function canMulti(t, lay) { const e = layEntry(t, lay); return !!(e && e[4]); }
+function baseTemp(t, lay) { return kindOf(t) === 'T' ? (isGround(t, lay) ? JTof(t).tGnd : JTof(t).tAir) : 30; }
+function tempKey(t, lay) { return (isGround(t, lay) ? 'G' : 'A') + baseTemp(t, lay); }
+function getTemp(t, lay) { const k = tempKey(t, lay), v = S.temps[k]; return typeof v === 'number' ? v : baseTemp(t, lay); }
+function setTemp(t, lay, v) { S.temps[tempKey(t, lay)] = Math.max(-10, Math.min(80, v)); }
+
+// ---- 1点の計算 ----
+// o: {size, lay, n, temp, multi, cores}
+function calc(t, o) {
+  const m = methodOf(t), k = mk(m);
+  if (k === 'K') {
+    const base = kBase(o.size);
+    if (base == null) return {ok: false, why: '146条の表の範囲外のサイズです'};
+    const I = INSUL[t.ins], corr = kCorr(t.ins, o.temp);
+    let red = 1, redRow = null;
+    if (o.lay === 'conduit') { redRow = kRedRow(o.n); red = redRow[1]; }
+    const raw = base * corr * red;
+    return {ok: true, k, val: Math.floor(raw * 10 + 1e-7) / 10, dec: 1, raw, base, corr, red, redRow, T: I.t, ins: I};
+  }
+  if (k === 'NW') {
+    const N = NWT[mref(m)], row = N.rows[o.size];
+    if (!row) return {ok: false, why: '内線規程の表にないサイズです'};
+    let col = 0, redRow = null;
+    if (o.lay === 'conduit') { redRow = kRedRow(o.n); col = 1 + K_RED.indexOf(redRow); }
+    const base = row[col];
+    const corr = o.temp >= N.T ? 0 : Math.sqrt((N.T - o.temp) / (N.T - 30));
+    const val = o.temp === 30 ? base : Math.floor(base * corr + 1e-9);
+    return {ok: true, k, val, raw: base * corr, base, corr, redRow, T: N.T, N};
+  }
+  const J = JTof(t), tb = J.cores[o.cores];
+  const i = tb ? tb.sizes.indexOf(o.size) : -1;
+  const e = tb ? tb.lays.find(l => l[0] === o.lay) : null;
+  const base = i >= 0 && e ? e[3][i] : null;
+  if (base == null) return {ok: false, why: 'この布設方法の値は表にありません'};
+  const th0 = e[2] ? J.tGnd : J.tAir;
+  const corr = o.temp >= J.tmax ? 0 : Math.sqrt((J.tmax - o.temp) / (J.tmax - th0));
+  const raw = base * corr * o.multi;
+  const val = o.temp === th0 && o.multi === 1 ? base : Math.floor(raw + 1e-9);
+  return {ok: true, k, val, raw, base, corr, th0, tmax: J.tmax, multi: o.multi, J};
+}
+const fmtA = r => r.dec ? r.val.toFixed(1) : String(r.val);
+function curOpt(t, size) {
+  const lay = layOf(t);
+  return {size: size || sizeOf(t), lay, n: S.n, temp: getTemp(t, lay), multi: canMulti(t, lay) ? S.multi : 1, cores: coresOf(t)};
+}
+
+// ---- 部品描画 ----
+function seg(el, opts, cur, on) {
+  el.innerHTML = opts.map(([v, l]) => `<button type="button" data-v="${esc(v)}" aria-pressed="${String(v) === String(cur)}">${esc(l)}</button>`).join('');
+  el.onclick = e => { const b = e.target.closest('button'); if (b) on(b.dataset.v); };
+}
+function renderTypes() {
+  const cats = [];
+  for (const t of TYPES) { let c = cats.find(c => c.name === t.cat); if (!c) cats.push(c = {name: t.cat, items: []}); c.items.push(t); }
+  $('#typepick').innerHTML = cats.map(c => `<div class="tgroup"><div class="gname">${esc(c.name)}</div><div class="tchips">${
+    c.items.map(t => `<button type="button" class="tchip" data-id="${esc(t.id)}" aria-pressed="${t.id === S.type}"><i style="background:var(${t.swatch})"></i>${esc(t.label)}</button>`).join('')
+  }</div></div>`).join('');
+  $('#typepick').onclick = e => { const b = e.target.closest('.tchip'); if (b) { S.type = b.dataset.id; update(); } };
+}
+
+function renderCond() {
+  const t = T(), k = kindOf(t), lay = layOf(t);
+  document.querySelectorAll('.tchip').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === t.id));
+  $('#tname').textContent = t.name;
+
+  const sz = sizesOf(t), cs = sizeOf(t);
+  $('#size').innerHTML = sz.map(s => `<option value="${s}"${s === cs ? ' selected' : ''}>${sizeLabel(s)}</option>`).join('');
+  $('#f-size').hidden = S.tab !== 'calc';
+
+  $('#f-method').hidden = t.methods.length < 2;
+  seg($('#method'), t.methods.map(m => [m, methodLabel(m)]), methodOf(t), v => { S.method[t.id] = v; update(); });
+
+  const cl = coreList(t);
+  $('#f-cores').hidden = cl.length < 2;
+  seg($('#cores'), cl.map(c => [c, coreName(c)]), coresOf(t), v => { S.cores[t.id] = +v; update(); });
+
+  const lo = layOptions(t);
+  $('#f-lay').hidden = S.tab === 'table';
+  const setLay = v => { if (k === 'T') S.layJ = v; else S.layK = v; update(); };
+  const useSel = lo.length > 3; // 布設の選択肢が多い表はプルダウン
+  $('#lay').hidden = useSel; $('#lay-sel').hidden = !useSel;
+  if (useSel) {
+    $('#lay-sel').innerHTML = lo.map(([v, l]) => `<option value="${esc(v)}"${v === lay ? ' selected' : ''}>${esc(l)}</option>`).join('');
+    $('#lay-sel').onchange = e => setLay(e.target.value);
+  } else seg($('#lay'), lo, lay, setLay);
+
+  const showN = k !== 'T' && lay === 'conduit' && S.tab !== 'table';
+  $('#f-n').hidden = !showN;
+  if (showN) { $('#n-label').textContent = '同一管内の電線数 (本)'; $('#n').value = S.n; $('#n-hint').textContent = `→ ${kRedRow(S.n)[2]}の区分`; }
+
+  // 温度(早見表では気中と地中の両方を使うので、表に応じて出し分け)
+  const tLay = S.tab === 'table' && k === 'T' ? lo[0][0] : lay;
+  const b0 = baseTemp(t, tLay), tv = getTemp(t, tLay);
+  $('#temp').value = tv;
+  $('#temp-label').textContent = isGround(t, tLay) ? '基底地中温度' : '周囲温度';
+  const chips = isGround(t, tLay) ? [15, 20, 25, 30] : [20, 25, 30, 35, 40, 45, 50];
+  const ct = $('#temp-chips');
+  ct.innerHTML = chips.map(c => `<button type="button" data-t="${c}" aria-pressed="${c === tv}">${c}℃${c === b0 ? ' 基準' : ''}</button>`).join('');
+  ct.onclick = e => { const b = e.target.closest('button'); if (b) { setTemp(t, tLay, +b.dataset.t); update(); } };
+  $('#temp').dataset.lay = tLay;
+
+  const showM = S.tab === 'table' ? lo.some(l => canMulti(t, l[0])) : canMulti(t, lay);
+  $('#f-multi').hidden = !showM;
+  if (showM) {
+    const custom = S.multiCustom;
+    $('#multi').innerHTML = MULTI_AIR.map((p, i) => `<option value="${i}"${!custom && i === S.multiIdx ? ' selected' : ''}>${esc(p[1])}(${f2(p[0])})</option>`).join('')
+      + `<option value="custom"${custom ? ' selected' : ''}>数値を直接入力</option>`;
+    $('#multi-custom').hidden = !custom;
+    if (document.activeElement !== $('#multi-custom')) $('#multi-custom').value = S.multi;
+  }
+}
+
+// ---- 断面図 ----
+function core(cx, cy, r, color, cu, shield) {
+  let s = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="var(${color})" stroke="var(--xs-stroke)" stroke-width=".7"/>`;
+  if (shield) s += `<circle cx="${cx}" cy="${cy}" r="${r * .9}" fill="none" stroke="var(--cu)" stroke-width="1.8"/><circle cx="${cx}" cy="${cy}" r="${r * .78}" fill="var(--semi)"/>`;
+  s += `<circle cx="${cx}" cy="${cy}" r="${cu}" fill="var(--cu)"/><circle cx="${cx - cu * .3}" cy="${cy - cu * .3}" r="${cu * .35}" fill="var(--cu-hi)" opacity=".7"/>`;
+  return s;
+}
+const CORE_COLORS = ['--c-blk', '--c-wht', '--c-red', '--c-grn'];
+function drawXsec(t) {
+  const d = t.draw || {}, n = t.kind === 'wire' ? 1 : coresOf(t);
+  const cols = d.colors || CORE_COLORS, hv = !!d.hv;
+  let s = '', cap;
+  if (d.bare) {
+    const R = 11; // 7本より
+    [[60, 60]].concat([0, 1, 2, 3, 4, 5].map(i => [60 + 2 * R * Math.cos(i * Math.PI / 3), 60 + 2 * R * Math.sin(i * Math.PI / 3)]))
+      .forEach(([x, y]) => { s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${R}" fill="var(--cu)" stroke="var(--xs-stroke)" stroke-width=".6"/><circle cx="${(x - 3).toFixed(1)}" cy="${(y - 3).toFixed(1)}" r="3.5" fill="var(--cu-hi)" opacity=".7"/>`; });
+    cap = '裸線(7本より)';
+  } else if (t.kind === 'wire') {
+    s = core(60, 60, 34, d.ins || '--c-blk', 20); cap = '絶縁電線';
+  } else if (d.shape === 'flat') {
+    const w = n === 2 ? 80 : 104, x = 60 - w / 2;
+    s = `<rect x="${x}" y="40" width="${w}" height="40" rx="14" fill="var(${d.sheath})" stroke="var(--xs-stroke)" stroke-width=".7"/>`;
+    for (let i = 0; i < n; i++) s += core(x + 20 + i * ((w - 40) / (n - 1)), 60, 13, cols[i], 7);
+    cap = `平形 ${n}心`;
+  } else if (d.shape === 'triplex') {
+    const pos = {2: [[37, 60], [83, 60]], 3: [[60, 37], [40, 72], [80, 72]], 4: [[38, 38], [82, 38], [82, 82], [38, 82]]}[n] || [];
+    const R = n === 4 ? 20.5 : 21.5;
+    pos.forEach(([x, y], i) => {
+      s += d.nosheath ? core(x, y, R, d.sheath, 11) : `<circle cx="${x}" cy="${y}" r="${R}" fill="var(${d.sheath})" stroke="var(--xs-stroke)" stroke-width=".7"/>` + core(x, y, R - 6, hv ? '--c-blk' : cols[i], hv ? 6.5 : 9, hv);
+    });
+    cap = d.nosheath ? `${n}個より` : ({2: 'デュプレックス', 3: 'トリプレックス', 4: 'クワドルプレックス'}[n] || '');
+  } else {
+    s = `<circle cx="60" cy="60" r="54" fill="var(${d.sheath})" stroke="var(--xs-stroke)" stroke-width=".7"/>`;
+    const L = {1: [[60, 60, 36]], 2: [[39, 60, 19], [81, 60, 19]], 3: [[60, 38, 20], [41, 71, 20], [79, 71, 20]], 4: [[41, 41, 17], [79, 41, 17], [79, 79, 17], [41, 79, 17]]}[n] || [];
+    L.forEach(([x, y, r], i) => { s += core(x, y, r, hv || n === 1 ? '--c-blk' : cols[i], r * (hv ? .42 : .58), hv); });
+    cap = coreName(n);
+  }
+  $('#xsec').innerHTML = s;
+  $('#xsec-cap').textContent = cap;
+}
+
+// ---- 許容電流ビュー ----
+function stepsHTML(rows) {
+  return rows.map(r => `<li class="${r.cls || ''}"><span class="op">${r.op || ''}</span><span class="desc"><b>${r.b}</b>${r.s ? `<small>${r.s}</small>` : ''}</span><span class="val">${r.v}</span></li>`).join('');
+}
+function breakerFor(a) { let r = null; for (const b of BREAKERS) if (b <= a + 1e-9) r = b; return r; }
+function condText(t, o) {
+  const parts = [];
+  if (t.kind !== 'wire') parts.push(coreName(o.cores));
+  const lay = layOptions(t).find(l => l[0] === o.lay);
+  if (lay) parts.push(lay[1]);
+  if (kindOf(t) !== 'T' && o.lay === 'conduit') parts.push(`${o.n}本`);
+  parts.push(`${o.temp}℃`);
+  if (o.multi !== 1) parts.push(`低減率${o.multi}`);
+  return parts.join(' ・ ');
+}
+
+function renderCalc() {
+  const t = T(), o = curOpt(t), r = calc(t, o), k = kindOf(t);
+  drawXsec(t);
+  $('#r-title').textContent = `${t.label} ${sizeLabel(o.size)} ・ ${condText(t, o)}`;
+  $('#r-val').textContent = r.ok ? fmtA(r) : '–';
+  $('#r-sub').textContent = '許容電流 ・ ' + (k === 'K' ? '電技解釈 第146条の計算値' : k === 'NW' ? r.N.name : JTof(t).name);
+  const pills = [];
+  if (r.ok) {
+    const bk = breakerFor(r.val);
+    if (bk) pills.push(`<span class="pill cu">遮断器の目安 ${bk}A 以下</span>`);
+    pills.push(`<span class="pill">${k === 'T' ? '導体' : '絶縁体'} 最高${k === 'T' ? r.tmax : r.T}℃</span>`);
+    if (r.corr === 0) pills.push('<span class="pill ng">周囲温度が許容温度以上です</span>');
+  }
+  $('#r-pills').innerHTML = pills.join('');
+
+  let rows = [];
+  if (!r.ok) rows = [{b: r.why, v: '–'}];
+  else if (k === 'K') {
+    const isD = o.size[0] === 'd';
+    rows.push({b: '軟銅線の許容電流', s: `${isD ? '146-1表 単線 直径' : '146-2表 より線 断面積'} ${sizeLabel(o.size)}(周囲30℃以下)`, v: r.base + ' A'});
+    rows.push({op: '×', b: '許容電流補正係数', s: `146-3表 ${esc(r.ins.name)}: ${r.ins.mult !== 1 ? r.ins.mult + ' × ' : ''}√((${r.T} − ${Math.max(o.temp, 30)}) ÷ 30)${o.temp < 30 ? '　※30℃以下は30℃として計算' : ''}`, v: r.corr.toFixed(3)});
+    rows.push(r.redRow
+      ? {op: '×', b: '電流減少係数', s: `146-4表 同一管内の電線数 ${o.n}本(${r.redRow[2]})`, v: f2(r.red)}
+      : {op: '×', b: '電流減少係数', s: '管に収めないので掛けない', v: '1.00'});
+    rows.push({op: '=', b: '許容電流', s: `${r.base} × ${r.corr.toFixed(3)} × ${f2(r.red)} = ${r.raw.toFixed(3)}(小数第1位まで表示)`, v: fmtA(r) + ' A', cls: 'total'});
+  } else if (k === 'NW') {
+    rows.push({b: '内線規程の許容電流', s: `${esc(r.N.name)} ${sizeLabel(o.size)} ・ ${r.redRow ? '管内 ' + r.redRow[2] : 'がいし引き'}(周囲30℃)`, v: r.base + ' A'});
+    rows.push(o.temp === 30
+      ? {op: '×', b: '周囲温度の補正', s: '周囲30℃なので補正しない', v: '1.00'}
+      : {op: '×', b: '周囲温度の補正係数', s: `√((${r.T} − ${o.temp}) ÷ (${r.T} − 30))`, v: r.corr.toFixed(3)});
+    rows.push({op: '=', b: '許容電流', s: o.temp === 30 ? '表の値' : `${r.base} × ${r.corr.toFixed(3)} = ${r.raw.toFixed(2)} → 小数点以下切り捨て`, v: fmtA(r) + ' A', cls: 'total'});
+  } else {
+    const layName = (layOptions(t).find(l => l[0] === o.lay) || [])[1];
+    rows.push({b: '基準の許容電流', s: `${esc(r.J.name)} ${layName} ${coreName(o.cores)} ${sizeLabel(o.size)}(基準${r.th0}℃)`, v: r.base + ' A'});
+    rows.push(o.temp === r.th0
+      ? {op: '×', b: '温度補正係数', s: `基準温度${r.th0}℃なので補正しない`, v: '1.00'}
+      : {op: '×', b: '温度補正係数', s: `√((${r.tmax} − ${o.temp}) ÷ (${r.tmax} − ${r.th0}))`, v: r.corr.toFixed(3)});
+    rows.push(canMulti(t, o.lay)
+      ? {op: '×', b: '多条布設の低減率', s: o.multi === 1 ? '1条布設(低減なし)' : (S.multiCustom ? '直接入力した値' : MULTI_AIR[S.multiIdx][1]), v: f2(o.multi)}
+      : {op: '×', b: '多条布設', s: '布設方法の条件に条数が含まれています', v: '1.00'});
+    rows.push({op: '=', b: '許容電流', s: o.temp === r.th0 && o.multi === 1 ? '表の値' : `${r.raw.toFixed(2)} → 小数点以下切り捨て`, v: fmtA(r) + ' A', cls: 'total'});
+  }
+  $('#r-steps').innerHTML = stepsHTML(rows);
+
+  $('#r-all-h').textContent = `同じ条件での全サイズ(${condText(t, o)})`;
+  const list = sizesOf(t).map(s => ({s, r: calc(t, Object.assign({}, o, {size: s}))}));
+  const h3 = k === 'K' ? ['146表', '補正', '減少'] : k === 'NW' ? ['表の値', '温度補正', ''] : ['基準値', '温度補正', '低減率'];
+  $('#r-all').innerHTML = `<thead><tr><th>サイズ</th>${h3.filter(Boolean).map(h => `<th>${h}</th>`).join('')}<th>許容電流</th><th>遮断器の目安</th></tr></thead><tbody>` +
+    list.map(({s, r}) => {
+      if (!r.ok) return `<tr data-size="${s}"><td>${sizeLabel(s)}</td><td colspan="${h3.filter(Boolean).length + 2}" class="dim jp">${r.why}</td></tr>`;
+      const mid = k === 'K' ? [r.base, r.corr.toFixed(3), f2(r.red)] : k === 'NW' ? [r.base, r.corr.toFixed(3)] : [r.base, r.corr.toFixed(3), f2(r.multi)];
+      const bk = breakerFor(r.val);
+      return `<tr data-size="${s}" class="${s === o.size ? 'sel' : ''}"><td>${sizeLabel(s)}</td>${mid.map(x => `<td>${x}</td>`).join('')}<td><b>${fmtA(r)} A</b></td><td>${bk ? bk + ' A' : '–'}</td></tr>`;
+    }).join('') + '</tbody>';
+  $('#r-all').onclick = e => { const tr = e.target.closest('tr[data-size]'); if (tr) { S.sizes[t.id] = tr.dataset.size; update(); } };
+
+  $('#r-notes').innerHTML = notesHTML(t);
+}
+function notesHTML(t) {
+  const k = kindOf(t), out = [`<p><b>${esc(t.label)}</b>(${esc(t.name)})。${esc(t.desc || '')}</p>`];
+  if (k === 'K') out.push(`<p>電技解釈 第146条: 146-1表・146-2表の値 × 146-3表の補正係数 × 146-4表の電流減少係数(管・線ぴに収める場合)。${esc(K_NOTE)}</p>`);
+  else if (k === 'NW') out.push(`<p>${esc(NW_NOTE)}</p>`);
+  else {
+    out.push(`<p>${esc(JTof(t).note || '')}</p>`);
+    if (jtbl(t).cnote) out.push(`<p>${esc(jtbl(t).cnote)}</p>`);
+    if (canMulti(t, layOf(t))) out.push(`<p>${esc(MULTI_NOTE)}</p>`);
+  }
+  if (t.note) out.push(`<p>${esc(t.note)}</p>`);
+  out.push('<p>「遮断器の目安」は許容電流以下で最大の標準定格です。分岐回路では電技解釈 第149条(20A配線用遮断器は1.6mm以上、30Aは2.6mm以上、40Aは8mm²以上、50Aは14mm²以上)も満たしてください。</p>');
+  return out.join('');
+}
+
+// ---- 負荷から選定 ----
+function designCurrent() {
+  const sy = SYS.find(s => s.id === S.sys) || SYS[0];
+  let I = S.load;
+  if (S.inmode === 'kW') I = S.load * 1000 / ((sy.ph === 3 ? Math.sqrt(3) : 1) * sy.vI * S.pf);
+  return {sy, I};
+}
+function wireReq(I) {
+  if (S.lkind !== 'motor') return {Iw: I, how: '一般負荷: 負荷電流以上'};
+  if (I <= 50) return {Iw: I * 1.25, how: '電動機50A以下: 定格電流 × 1.25'};
+  return {Iw: I * 1.1, how: '電動機50A超: 定格電流 × 1.1'};
+}
+function breakerUp(a) { for (const b of BREAKERS) if (b >= a - 1e-9) return b; return null; }
+
+function renderSelect() {
+  const t = T(), {sy, I} = designCurrent(), {Iw, how} = wireReq(I);
+  const useBk = S.bkchk && S.lkind !== 'motor';
+  const bk = breakerUp(I);
+  const need = useBk && bk ? Math.max(Iw, bk) : Iw;
+  const rows = sizesOf(t).map(s => {
+    const r = calc(t, curOpt(t, s));
+    const e = sy.K * S.len * I / (1000 * sizeArea(s)), pct = e / sy.vref * 100;
+    return {s, r, e, pct, okI: r.ok && r.val >= need - 1e-9, okV: pct <= S.vd + 1e-9};
+  });
+  const pick = rows.find(x => x.okI && x.okV), pickI = rows.find(x => x.okI);
+
+  const kv = (cls, k, v, u, d) => `<div class="kv ${cls}"><span class="k">${k}</span><span class="v">${v}${u ? `<small>${u}</small>` : ''}</span><span class="d">${d}</span></div>`;
+  $('#s-verdict').innerHTML =
+    kv('', '負荷電流', f1(I), 'A', S.inmode === 'kW' ? `${S.load}kW ÷ (${sy.ph === 3 ? '√3 × ' : ''}${sy.vI}V × 力率${S.pf})` : '入力した値') +
+    kv('', '電線に必要な許容電流', f1(need), 'A', useBk && bk && bk > Iw ? `遮断器 ${bk}A 以上` : how) +
+    kv(pick ? 'main' : 'bad', '選定サイズ', pick ? sizeLabel(pick.s) : '該当なし', '', pick ? `許容電流 ${fmtA(pick.r)}A ・ 電圧降下 ${f2(pick.pct)}%` : (pickI ? `電流だけなら ${sizeLabel(pickI.s)}。電圧降下が${S.vd}%を超えます` : 'この種類・条件では許容電流が足りません')) +
+    kv('', '配線用遮断器の目安', S.lkind === 'motor' ? '別途' : (bk || '–'), S.lkind === 'motor' ? '' : 'A', S.lkind === 'motor' ? '始動電流を見て選定(第148条)' : '負荷電流以上で最小の標準定格');
+
+  $('#s-table').innerHTML = `<thead><tr><th>サイズ</th><th>許容電流</th><th>必要</th><th>電圧降下</th><th>降下率</th><th>判定</th></tr></thead><tbody>` +
+    rows.map(x => {
+      const st = !x.r.ok ? '<span class="pill">値なし</span>' : x.okI && x.okV ? '<span class="pill ok">OK</span>' : !x.okI ? '<span class="pill ng">電流不足</span>' : '<span class="pill warn">降下超過</span>';
+      return `<tr data-size="${x.s}" class="${pick && x.s === pick.s ? 'pick' : ''}"><td>${sizeLabel(x.s)}</td><td>${x.r.ok ? fmtA(x.r) + ' A' : '–'}</td><td class="${x.okI ? '' : 'dim'}">${f1(need)} A</td><td>${f2(x.e)} V</td><td>${f2(x.pct)} %</td><td class="jp">${st}</td></tr>`;
+    }).join('') + '</tbody>';
+  $('#s-table').onclick = e => { const tr = e.target.closest('tr[data-size]'); if (tr) { S.sizes[t.id] = tr.dataset.size; S.tab = 'calc'; update(); } };
+
+  $('#s-notes').innerHTML = `<p><b>電圧降下</b> e = ${sy.K} × L × I ÷ (1000 × A)(${esc(sy.name)}。L=こう長m、I=負荷電流A、A=断面積mm²、単線は直径から断面積を計算)。降下率は ${sy.vref}V に対する割合です。内線規程の簡略式で、力率1・リアクタンスなし・平衡負荷として計算しています。</p>
+  <p><b>許容電流</b> 左の条件(${esc(t.label)} ・ ${esc(condText(t, curOpt(t)))})で計算しています。電動機は電技解釈 第148条により、定格電流の合計が50A以下なら1.25倍、50Aを超えると1.1倍の許容電流が必要です。</p>
+  <p>行をタップすると、そのサイズの計算内訳を「許容電流」タブで表示します。</p>`;
+}
+
+function renderSelectInputs() {
+  $('#sys').innerHTML = SYS.map(s => `<option value="${s.id}"${s.id === S.sys ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+  seg($('#inmode'), [['A', '電流(A)'], ['kW', '容量(kW)']], S.inmode, v => { S.inmode = v; update(); });
+  seg($('#lkind'), [['gen', '一般'], ['motor', '電動機']], S.lkind, v => { S.lkind = v; update(); });
+  $('#load-label').textContent = S.inmode === 'kW' ? '負荷容量 (kW)' : '負荷電流 (A)';
+  $('#f-pf').hidden = S.inmode !== 'kW';
+  for (const id of ['load', 'pf', 'len', 'vd']) if (document.activeElement !== $('#' + id)) $('#' + id).value = S[id];
+  $('#bkchk').checked = S.bkchk; $('#bkchk').disabled = S.lkind === 'motor';
+}
+
+// ---- 早見表 ----
+function renderTable() {
+  const t = T(), k = kindOf(t), sz = sizesOf(t), base = curOpt(t);
+  let cols;
+  if (k !== 'T') {
+    const tt = getTemp(t, 'open');
+    cols = [{h: 'がいし引き', o: {lay: 'open', temp: tt}}].concat(K_RED.map(r => ({h: `管内<br>${r[2]}`, o: {lay: 'conduit', n: r[0] === Infinity ? 999 : r[0], temp: tt}})));
+    $('#t-h').textContent = `${t.label} の許容電流 早見表(${k === 'K' ? '電技解釈146条' : '内線規程'})`;
+    $('#t-sub').textContent = `周囲温度 ${tt}℃。単位 A${k === 'K' ? '(小数第1位まで)' : ''}。行をタップすると計算の内訳を表示します。`;
+  } else {
+    const J = JTof(t);
+    cols = layOptions(t).map(l => { const tt = getTemp(t, l[0]); return {h: `${l[1].replace(' ', '<br>')}<br>${tt}℃`, o: {lay: l[0], temp: tt, multi: canMulti(t, l[0]) ? S.multi : 1}}; });
+    $('#t-h').textContent = `${t.label} ${coreName(coresOf(t))} の許容電流 早見表`;
+    $('#t-sub').textContent = `${J.name}${S.multi !== 1 ? ` ・ 低減率${S.multi}` : ''}。単位 A。行をタップすると計算の内訳を表示します。`;
+  }
+  $('#t-table').innerHTML = `<thead><tr><th>サイズ</th>${cols.map(c => `<th>${c.h}</th>`).join('')}</tr></thead><tbody>` +
+    sz.map(s => `<tr data-size="${s}" class="${s === base.size ? 'sel' : ''}"><td>${sizeLabel(s)}</td>${cols.map(c => {
+      const r = calc(t, Object.assign({}, base, {size: s}, c.o)); return `<td>${r.ok ? fmtA(r) : '–'}</td>`;
+    }).join('')}</tr>`).join('') + '</tbody>';
+  $('#t-table').onclick = e => { const tr = e.target.closest('tr[data-size]'); if (tr) { S.sizes[t.id] = tr.dataset.size; S.tab = 'calc'; update(); } };
+
+  const temps = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+  let rows, head;
+  if (k === 'K') {
+    head = '絶縁体(146-3表)';
+    rows = Object.entries(INSUL).map(([key, v]) => ({h: `${v.short} ${v.t}℃`, cur: key === t.ins, f: th => kCorr(key, th)}));
+  } else if (k === 'NW') {
+    head = '内線規程';
+    rows = Object.values(NWT).map(N => ({h: `${N.T === 60 ? 'IV' : 'HIV・EM-IE'} ${N.T}℃`, cur: N === NWT[mref(methodOf(t))], f: th => th >= N.T ? 0 : Math.sqrt((N.T - th) / (N.T - 30))}));
+  } else {
+    const J = JTof(t);
+    head = '布設(基準温度)';
+    const lo = layOptions(t), gs = [];
+    if (lo.some(l => !isGround(t, l[0]))) gs.push(['気中・暗きょ・電線管', J.tAir]);
+    if (lo.some(l => isGround(t, l[0]))) gs.push(['直埋・管路', J.tGnd]);
+    rows = gs.map(([name, th0]) => ({h: `${name} 基準${th0}℃`, f: th => th >= J.tmax ? 0 : Math.sqrt((J.tmax - th) / (J.tmax - th0))}));
+  }
+  $('#t-temp').innerHTML = `<thead><tr><th>${head}</th>${temps.map(x => `<th>${x}℃</th>`).join('')}</tr></thead><tbody>` +
+    rows.map(r => `<tr class="${r.cur ? 'sel' : ''}"><td class="jp">${esc(r.h)}</td>${temps.map(x => `<td>${f2(r.f(x))}</td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+
+// ---- 全体更新 ----
+function update() {
+  save();
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === S.tab));
+  $('#view-calc').hidden = S.tab !== 'calc';
+  $('#view-select').hidden = S.tab !== 'select';
+  $('#view-table').hidden = S.tab !== 'table';
+  renderCond();
+  if (S.tab === 'calc') renderCalc();
+  else if (S.tab === 'select') { renderSelectInputs(); renderSelect(); }
+  else renderTable();
+  $('#foot-src').textContent = SOURCES;
+  renderMbar();
+}
+function refreshOnly() { // 入力中はフォーカスを奪わない
+  if (S.tab === 'calc') renderCalc(); else if (S.tab === 'select') renderSelect(); else renderTable();
+  renderMbar();
+}
+// スマホの画面下バー: 結果が画面外のときだけ出す
+function mbTarget() { return S.tab === 'calc' ? $('#view-calc .hero') : S.tab === 'select' ? $('#s-verdict') : null; }
+function renderMbar() {
+  const tg = mbTarget(), bar = $('#mbar');
+  if (!tg) { bar.hidden = true; return; }
+  if (S.tab === 'calc') {
+    $('#mb-t').textContent = $('#r-title').textContent;
+    $('#mb-v').innerHTML = `${esc($('#r-val').textContent)}<small>A</small>`;
+  } else {
+    const main = $('#s-verdict .kv.main .v, #s-verdict .kv.bad .v'), d = $('#s-verdict .kv.main .d, #s-verdict .kv.bad .d');
+    $('#mb-t').textContent = '選定サイズ ・ ' + (d ? d.textContent : '');
+    $('#mb-v').textContent = main ? main.textContent : '–';
+  }
+  const r = tg.getBoundingClientRect();
+  bar.hidden = r.bottom > 0 && r.top < window.innerHeight - 80;
+}
+$('#mbar').onclick = () => { const tg = mbTarget(); if (tg) tg.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'}); };
+let mbRaf = 0;
+addEventListener('scroll', () => { if (!mbRaf) mbRaf = requestAnimationFrame(() => { mbRaf = 0; renderMbar(); }); }, {passive: true});
+addEventListener('resize', () => renderMbar());
+
+// ---- イベント ----
+document.querySelector('.tabs').onclick = e => { const b = e.target.closest('button[data-tab]'); if (b) { S.tab = b.dataset.tab; update(); } };
+$('#size').onchange = e => { S.sizes[T().id] = e.target.value; update(); };
+function numIn(el, apply) {
+  el.addEventListener('input', () => { const v = parseFloat(el.value); if (isFinite(v)) { apply(v); save(); refreshOnly(); } });
+  el.addEventListener('change', () => update());
+}
+numIn($('#n'), v => { S.n = Math.max(1, Math.min(200, Math.round(v))); $('#n-hint').textContent = `→ ${kRedRow(S.n)[2]}の区分`; });
+numIn($('#temp'), v => { setTemp(T(), $('#temp').dataset.lay, v); });
+numIn($('#load'), v => { S.load = Math.max(0, v); });
+numIn($('#pf'), v => { S.pf = Math.max(0.1, Math.min(1, v)); });
+numIn($('#len'), v => { S.len = Math.max(0, v); });
+numIn($('#vd'), v => { S.vd = Math.max(0.1, v); });
+numIn($('#multi-custom'), v => { S.multi = Math.max(0.1, Math.min(1, v)); });
+$('#multi').onchange = e => {
+  if (e.target.value === 'custom') S.multiCustom = true;
+  else { S.multiCustom = false; S.multiIdx = +e.target.value; S.multi = MULTI_AIR[S.multiIdx][0]; }
+  update();
+};
+$('#sys').onchange = e => { S.sys = e.target.value; update(); };
+$('#bkchk').onchange = e => { S.bkchk = e.target.checked; update(); };
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-step]'); if (!b) return;
+  const t = T(), d = +b.dataset.d;
+  if (b.dataset.step === 'n') S.n = Math.max(1, Math.min(200, S.n + d));
+  else { const lay = $('#temp').dataset.lay; setTemp(t, lay, getTemp(t, lay) + d); }
+  update();
+});
+
+renderTypes();
+update();
+
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
