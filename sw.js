@@ -1,5 +1,5 @@
 // 電線許容電流計算機 オフライン用 Service Worker
-const VERSION = '20260930140535';
+const VERSION = '20260930152409';
 const APP = 'kyoyo-app-' + VERSION;
 const FONTS = 'kyoyo-fonts-v1';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];

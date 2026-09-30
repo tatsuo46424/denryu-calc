@@ -67,6 +67,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{background:var(--bg);color:var(--ink)}
 body{font-family:var(--f-body);font-size:15px;line-height:1.6;-webkit-text-size-adjust:100%}
 .app{max-width:1200px;margin:0 auto;padding-inline:16px;padding-block:12px 40px}
@@ -81,7 +82,7 @@ h1,h2{text-wrap:balance;margin:0}
 .logo{width:40px;height:40px;flex:none}
 .brand h1{font-size:1.35rem;font-weight:900;letter-spacing:.02em}
 .brand .sub{margin:0;color:var(--mute);font-size:.8rem}
-.tabs{display:flex;background:var(--sunk);border-radius:999px;padding:4px;gap:2px}
+.tabs{display:flex;background:var(--sunk);border-radius:999px;padding:4px;gap:2px;max-width:100%;overflow-x:auto;scrollbar-width:none}
 .tabs button{border:0;background:none;padding:8px 16px;border-radius:999px;cursor:pointer;font-weight:700;font-size:.9rem;color:var(--mute);white-space:nowrap}
 .tabs button[aria-selected="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
 
@@ -186,6 +187,34 @@ td.dim{color:var(--mute)}
 .check input{width:18px;height:18px;accent-color:var(--accent)}
 @media (prefers-reduced-motion:no-preference){.big .v{transition:color .2s}}
 body{margin:0}
+/* 電気計算 */
+.toolmenu{display:flex;flex-direction:column;gap:8px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px);max-height:calc(100vh - 24px);overflow:auto}
+.toolmenu[hidden]{display:none}
+.tool-list{display:flex;flex-direction:column;gap:2px}
+.tool-list .tg{font-size:.72rem;color:var(--mute);font-weight:700;letter-spacing:.06em;margin:10px 0 2px}
+.tool-list .tg:first-child{margin-top:0}
+.tool-list button{text-align:left;border:0;background:none;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:.88rem;color:var(--ink)}
+.tool-list button:hover{background:var(--sunk)}
+.tool-list button[aria-current="true"]{background:var(--accent-soft);color:var(--accent);font-weight:700}
+#tool-sel{display:none}
+.toolmenu > .lbl{display:none}
+@media (max-width:860px){
+  .toolmenu{position:static;max-height:none}
+  .tool-list{display:none}
+  #tool-sel{display:block}
+  .toolmenu > .lbl{display:block}
+}
+.tool-head{margin-bottom:14px}
+.tool-title{font-size:1.2rem;font-weight:900;margin:2px 0 4px}
+.tool-head .small{margin:0;max-width:70ch}
+.tool-fig{display:flex;justify-content:center}
+.tool-fig svg{max-width:100%;height:auto}
+.fig-t{font-family:var(--f-num);font-size:12px;fill:var(--ink)}
+.fig-m{font-size:11px;fill:var(--mute)}
+.kv .v.ok{color:var(--ok)} .kv .v.ng{color:var(--ng)} .kv .v.cu{color:var(--accent)}
+.kv.hl{background:var(--accent-soft);border-radius:8px;padding:8px 10px;margin:-8px -10px}
+.field .unit{font-weight:500;color:var(--mute);letter-spacing:0}
+@media (max-width:420px){.tabs{width:100%}.tabs button{flex:1;padding:8px 6px;font-size:.8rem}}
 /* スマホ: 画面下に結果を常に表示 */
 .mbar{display:none}
 @media (max-width:860px){
@@ -210,16 +239,22 @@ body{margin:0}
       <circle cx="13.5" cy="24.2" r="6.2" fill="var(--c-wht)"/><circle cx="13.5" cy="24.2" r="3.6" fill="var(--cu)"/>
       <circle cx="26.5" cy="24.2" r="6.2" fill="var(--c-red)"/><circle cx="26.5" cy="24.2" r="3.6" fill="var(--cu)"/>
     </svg>
-    <div><h1>電線許容電流計算機</h1><p class="sub">電技解釈 第146条 ／ JCS 0168 の値で計算</p></div>
+    <div><h1>電線許容電流計算機</h1><p class="sub">許容電流 ・ 電力換算 ・ 短絡電流 ・ 試験 ／ 高圧6.6kV対応</p></div>
   </div>
   <nav class="tabs" role="tablist" aria-label="機能">
     <button role="tab" id="tab-calc" data-tab="calc" aria-selected="true">許容電流</button>
     <button role="tab" id="tab-select" data-tab="select" aria-selected="false">負荷から選定</button>
     <button role="tab" id="tab-table" data-tab="table" aria-selected="false">早見表</button>
+    <button role="tab" id="tab-tools" data-tab="tools" aria-selected="false">電気計算</button>
   </nav>
 </header>
 
 <main class="layout">
+  <aside class="panel toolmenu" id="toolmenu" aria-label="計算ツール" hidden>
+    <label class="lbl" for="tool-sel">計算ツール</label>
+    <select id="tool-sel"></select>
+    <nav id="tool-list" class="tool-list"></nav>
+  </aside>
   <aside class="panel cond" aria-label="電線と布設の条件">
     <div class="field">
       <div class="lbl">電線の種類</div>
@@ -316,6 +351,18 @@ body{margin:0}
         <h2>周囲温度による補正係数</h2>
         <div class="tbl-wrap"><table id="t-temp"></table></div>
       </div>
+    </div>
+    <!-- 電気計算 -->
+    <div id="view-tools" class="main" hidden>
+      <div class="panel">
+        <div class="tool-head"><span class="eyebrow" id="tool-group"></span><h2 id="tool-title" class="tool-title"></h2><p class="small" id="tool-desc"></p></div>
+        <div class="form-grid" id="tool-form"></div>
+      </div>
+      <div class="panel verdict" id="tool-tiles"></div>
+      <div class="panel" id="tool-fig-panel" hidden><div id="tool-fig" class="tool-fig"></div></div>
+      <div class="panel" id="tool-table-panel" hidden><h2 id="tool-table-h"></h2><div class="tbl-wrap"><table id="tool-table"></table></div></div>
+      <div class="panel" id="tool-steps-panel"><h2>計算の内訳</h2><ol class="steps" id="tool-steps"></ol></div>
+      <div class="panel notes" id="tool-notes"></div>
     </div>
   </section>
 </main>
@@ -1075,14 +1122,22 @@ function update() {
   $('#view-calc').hidden = S.tab !== 'calc';
   $('#view-select').hidden = S.tab !== 'select';
   $('#view-table').hidden = S.tab !== 'table';
-  renderCond();
-  if (S.tab === 'calc') renderCalc();
-  else if (S.tab === 'select') { renderSelectInputs(); renderSelect(); }
-  else renderTable();
+  const tools = S.tab === 'tools';
+  $('#view-tools').hidden = !tools;
+  $('#toolmenu').hidden = !tools;
+  document.querySelector('.cond').hidden = tools;
+  if (tools) renderTools();
+  else {
+    renderCond();
+    if (S.tab === 'calc') renderCalc();
+    else if (S.tab === 'select') { renderSelectInputs(); renderSelect(); }
+    else renderTable();
+  }
   $('#foot-src').textContent = SOURCES;
   renderMbar();
 }
 function refreshOnly() { // 入力中はフォーカスを奪わない
+  if (S.tab === "tools") return;
   if (S.tab === 'calc') renderCalc(); else if (S.tab === 'select') renderSelect(); else renderTable();
   renderMbar();
 }
@@ -1136,6 +1191,750 @@ document.addEventListener('click', e => {
   update();
 });
 
+
+// ===== 電気計算ツール =====
+const SQ3 = Math.sqrt(3);
+const deg = r => r * 180 / Math.PI;
+// 数値の表示(桁数自動)
+function na(x, d) {
+  if (x == null || !isFinite(x)) return '–';
+  if (d == null) { const a = Math.abs(x); d = a >= 1000 ? 0 : a >= 100 ? 1 : a >= 10 ? 2 : a >= 1 ? 2 : 3; }
+  return x.toLocaleString('ja-JP', {maximumFractionDigits: d, minimumFractionDigits: 0});
+}
+const nfix = (x, d) => (x == null || !isFinite(x)) ? '–' : x.toLocaleString('ja-JP', {minimumFractionDigits: d, maximumFractionDigits: d});
+const PH = [['3', '三相'], ['1', '単相']];
+const TR3 = [20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000];
+const TR1 = [10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500];
+const CT_LIST = [5, 10, 15, 20, 30, 40, 50, 60, 75, 100, 150, 200, 300, 400, 500, 600, 750, 1000, 1500, 2000];
+// 高圧進相コンデンサの定格容量(kvar)
+// JIS C 4902 の3.3/6.6kV回路の設備容量(kvar)
+const PFC_HV = [10, 15, 20, 25, 30, 50, 75, 100, 150, 200, 250, 300, 400, 500];
+const PFC_NOTE = '高圧進相コンデンサは直列リアクトル(SR 6%)付きが標準で、コンデンサの定格電圧は 6,600 ÷ (1 − 0.06) ≒ 7,020V、コンデンサ本体の定格容量は設備容量 ÷ 0.94 です(JIS C 4902)。開閉装置1つあたり300kvar以下、自動力率調整は200kvar以下(JIS C 4620)。軽負荷時に進み力率にならないよう注意してください。';
+// 高圧需要の変圧器 代表値(三菱電機 油入 Rシリーズ 50Hz、トップランナー2014品のカタログ代表値): kVA → [無負荷損W, 負荷損W]
+const TR_REP = {
+  3: {50: [120, 815], 75: [160, 1060], 100: [180, 1380], 150: [225, 1940], 200: [325, 2080], 300: [465, 2510], 500: [665, 3650], 750: [1100, 4840], 1000: [1410, 5740]},
+  1: {50: [90, 655], 75: [110, 930], 100: [140, 1140], 150: [195, 1490], 200: [215, 2040], 300: [285, 2730], 500: [380, 3820]}
+};
+const tile = (k, v, u, d, cls) => ({k, v, u, d, cls});
+const upStd = (x, list) => list.find(s => s >= x - 1e-9);
+
+const TOOLS = [];
+const GORDER = ['基本・電力', '変圧器', '短絡・地絡・保護', '試験・点検', '負荷・電線'];
+const addTool = t => TOOLS.push(t);
+
+// ---------- 基本・電力 ----------
+addTool({
+  id: 'power', g: '基本・電力', name: '電力の換算(kVA・kW・kVAR・A・V・力率)',
+  desc: 'わかっている値を2つ入れると、皮相電力・有効電力・無効電力・電流・力率をまとめて求めます。力率は遅れ(誘導性負荷)として計算します。',
+  fields: [
+    {id: 'ph', l: '相', t: 'sel', o: PH, d: '3'},
+    {id: 'v', l: '線間電圧', u: 'V', d: 6600},
+    {id: 'known', l: 'わかっている値', t: 'sel', d: 'SPF', o: [['SPF', 'kVAと力率'], ['PPF', 'kWと力率'], ['IPF', '電流と力率'], ['PQ', 'kWとkVAR'], ['SP', 'kVAとkW'], ['IP', '電流とkW'], ['QPF', 'kVARと力率']]},
+    {id: 's', l: '皮相電力', u: 'kVA', d: 300, show: v => ['SPF', 'SP'].includes(v.known)},
+    {id: 'p', l: '有効電力', u: 'kW', d: 240, show: v => ['PPF', 'PQ', 'SP', 'IP'].includes(v.known)},
+    {id: 'q', l: '無効電力', u: 'kVAR', d: 180, show: v => ['PQ', 'QPF'].includes(v.known)},
+    {id: 'i', l: '電流', u: 'A', d: 26.2, show: v => ['IPF', 'IP'].includes(v.known)},
+    {id: 'pf', l: '力率', u: '(0〜1)', d: 0.8, step: 0.01, show: v => /PF$/.test(v.known)}
+  ],
+  calc(v) {
+    const k = v.ph === '3' ? SQ3 : 1, kv = k * v.v / 1000;
+    let S, P, Q, pf;
+    const Sfi = () => kv * v.i;
+    switch (v.known) {
+      case 'SPF': S = v.s; pf = v.pf; break;
+      case 'PPF': P = v.p; pf = v.pf; S = P / pf; break;
+      case 'IPF': S = Sfi(); pf = v.pf; break;
+      case 'PQ': P = v.p; Q = v.q; S = Math.hypot(P, Q); pf = P / S; break;
+      case 'SP': S = v.s; P = v.p; pf = P / S; break;
+      case 'IP': S = Sfi(); P = v.p; pf = P / S; break;
+      case 'QPF': Q = v.q; pf = v.pf; S = Q / Math.sqrt(1 - pf * pf); break;
+    }
+    if (!(pf > 0 && pf <= 1)) return {warn: '力率が0〜1の範囲になりません。kWがkVAより大きくないか確認してください。'};
+    const sin = Math.sqrt(1 - pf * pf);
+    if (P == null) P = S * pf;
+    if (Q == null) Q = S * sin;
+    const I = S / kv, th = Math.acos(pf);
+    const kname = v.ph === '3' ? '√3 × ' : '';
+    return {
+      tiles: [tile('皮相電力', na(S), 'kVA', 'S'), tile('有効電力', na(P), 'kW', 'P = S × cosθ'), tile('無効電力', na(Q), 'kVAR', 'Q = S × sinθ'),
+        tile('電流', na(I), 'A', `I = S ÷ (${kname}V)`, 'cu'), tile('力率', nfix(pf * 100, 1), '%', `cosθ = ${nfix(pf, 3)}`), tile('位相角', nfix(deg(th), 1), '°', `sinθ = ${nfix(sin, 3)}`)],
+      steps: [
+        {b: '皮相電力 S', s: v.known === 'IPF' || v.known === 'IP' ? `${kname}${v.v}V × ${na(v.i)}A ÷ 1000` : v.known === 'PQ' ? `√(P² + Q²) = √(${na(P)}² + ${na(Q)}²)` : v.known === 'PPF' ? `P ÷ cosθ = ${na(P)} ÷ ${pf}` : v.known === 'QPF' ? `Q ÷ sinθ` : '入力値', v: na(S) + ' kVA'},
+        {op: '→', b: '有効電力 P', s: 'S × cosθ', v: na(P) + ' kW'},
+        {op: '→', b: '無効電力 Q', s: 'S × sinθ = √(S² − P²)', v: na(Q) + ' kVAR'},
+        {op: '→', b: '電流 I', s: `S × 1000 ÷ (${kname}${v.v}V)`, v: na(I) + ' A', cls: 'total'}
+      ],
+      fig: triangleSVG(P, Q, S, th),
+      notes: ['三相は S = √3 × V × I、単相は S = V × I(Vは線間電圧)。進み力率(コンデンサ過補償)でも大きさは同じ式で求まります。']
+    };
+  }
+});
+function triangleSVG(P, Q, S, th) {
+  const W = 380, H = 210, m = 40, sc = Math.min((W - 2 * m - 60) / Math.max(P, 1e-9), (H - 2 * m) / Math.max(Q, 1e-9));
+  const x0 = m, y0 = m, x1 = x0 + P * sc, y1 = y0 + Q * sc;
+  const a = 26;
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="電力の三角形">
+  <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke="var(--ok)" stroke-width="3"/>
+  <line x1="${x1}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--warn)" stroke-width="3"/>
+  <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--accent)" stroke-width="3"/>
+  <path d="M ${x0 + a} ${y0} A ${a} ${a} 0 0 1 ${x0 + a * Math.cos(th)} ${y0 + a * Math.sin(th)}" fill="none" stroke="var(--mute)"/>
+  <text class="fig-t" x="${(x0 + x1) / 2}" y="${y0 - 10}" text-anchor="middle" fill="var(--ok)">P ${na(P)} kW</text>
+  <text class="fig-t" x="${x1 + 8}" y="${(y0 + y1) / 2 + 4}">Q ${na(Q)} kVAR</text>
+  <text class="fig-t" x="${(x0 + x1) / 2 - 12}" y="${(y0 + y1) / 2 + 20}" text-anchor="end">S ${na(S)} kVA</text>
+  <text class="fig-m" x="${x0 + a + 6}" y="${y0 + 16}">θ ${nfix(deg(th), 1)}°</text>
+</svg>`;
+}
+
+addTool({
+  id: 'ohm', g: '基本・電力', name: 'オームの法則・電力(V・I・R・W)',
+  desc: '直流回路や抵抗負荷(ヒーターなど)で、電圧・電流・抵抗・電力のうち2つから残りを求めます。',
+  fields: [
+    {id: 'known', l: 'わかっている値', t: 'sel', d: 'VR', o: [['VR', '電圧と抵抗'], ['VI', '電圧と電流'], ['IR', '電流と抵抗'], ['PV', '電力と電圧'], ['PI', '電力と電流'], ['PR', '電力と抵抗']]},
+    {id: 'v', l: '電圧', u: 'V', d: 200, show: v => /V/.test(v.known)},
+    {id: 'i', l: '電流', u: 'A', d: 10, show: v => /I/.test(v.known)},
+    {id: 'r', l: '抵抗', u: 'Ω', d: 20, show: v => /R/.test(v.known)},
+    {id: 'p', l: '電力', u: 'W', d: 2000, show: v => /P/.test(v.known)}
+  ],
+  calc(v) {
+    let V, I, R, P;
+    switch (v.known) {
+      case 'VR': V = v.v; R = v.r; I = V / R; break;
+      case 'VI': V = v.v; I = v.i; R = V / I; break;
+      case 'IR': I = v.i; R = v.r; V = I * R; break;
+      case 'PV': P = v.p; V = v.v; I = P / V; R = V / I; break;
+      case 'PI': P = v.p; I = v.i; V = P / I; R = V / I; break;
+      case 'PR': P = v.p; R = v.r; I = Math.sqrt(P / R); V = I * R; break;
+    }
+    if (P == null) P = V * I;
+    return {
+      tiles: [tile('電圧', na(V), 'V'), tile('電流', na(I), 'A', '', 'cu'), tile('抵抗', na(R), 'Ω'), tile('電力', na(P), 'W', na(P / 1000, 3) + ' kW')],
+      steps: [{b: 'V = I × R', v: na(V) + ' V'}, {b: 'I = V ÷ R', v: na(I) + ' A'}, {b: 'P = V × I = I² × R = V² ÷ R', v: na(P) + ' W', cls: 'total'}]
+    };
+  }
+});
+
+addTool({
+  id: 'demand', g: '基本・電力', name: '需要率・不等率・負荷率と変圧器容量',
+  desc: '設備容量から最大需要電力と平均電力を求め、必要な変圧器容量の目安を出します。',
+  fields: [
+    {id: 'ph', l: '変圧器', t: 'sel', o: [['3', '三相'], ['1', '単相']], d: '3'},
+    {id: 'cap', l: '設備容量の合計', u: 'kW', d: 400},
+    {id: 'df', l: '需要率', u: '%', d: 60},
+    {id: 'dv', l: '不等率', u: '(1以上)', d: 1.2, step: 0.05},
+    {id: 'lf', l: '負荷率', u: '%', d: 50},
+    {id: 'pf', l: '力率', u: '(0〜1)', d: 0.85, step: 0.01},
+    {id: 'margin', l: '余裕', u: '%', d: 0}
+  ],
+  calc(v) {
+    const Pm = v.cap * v.df / 100 / v.dv, Pa = Pm * v.lf / 100, S = Pm / v.pf * (1 + v.margin / 100);
+    const std = upStd(S, v.ph === '3' ? TR3 : TR1);
+    return {
+      tiles: [tile('最大需要電力', na(Pm), 'kW', '設備容量 × 需要率 ÷ 不等率'), tile('平均電力', na(Pa), 'kW', '最大需要電力 × 負荷率'),
+        tile('必要な変圧器容量', na(S), 'kVA', '最大需要電力 ÷ 力率'), tile('標準容量の目安', std ? std : '–', std ? 'kVA' : '', `${v.ph === '3' ? '三相' : '単相'}の標準容量から`, 'ok'),
+        tile('年間使用電力量', na(Pa * 8760, 0), 'kWh', '平均電力 × 8,760時間'), tile('変圧器の利用率', std ? nfix(S / std * 100, 0) : '–', '%', '必要容量 ÷ 標準容量')],
+      steps: [
+        {b: '最大需要電力', s: `${v.cap}kW × ${v.df}% ÷ ${v.dv}`, v: na(Pm) + ' kW'},
+        {op: '×', b: '負荷率', s: `${v.lf}%`, v: na(Pa) + ' kW'},
+        {op: '→', b: '変圧器容量', s: `${na(Pm)}kW ÷ ${v.pf}${v.margin ? ` × (1 + ${v.margin}%)` : ''}`, v: na(S) + ' kVA', cls: 'total'}
+      ],
+      notes: ['需要率 = 最大需要電力 ÷ 設備容量、不等率 = 各負荷の最大需要電力の和 ÷ 合成最大需要電力、負荷率 = 平均電力 ÷ 最大需要電力。', '変圧器の標準容量は一般的な系列です。将来の増設分は「余裕」で見込んでください。']
+    };
+  }
+});
+
+// ---------- 変圧器 ----------
+addTool({
+  id: 'trcur', g: '変圧器', name: '変圧器の定格電流と負荷率',
+  desc: '容量と電圧から1次・2次の定格電流を求めます。2次の実測電流を入れると負荷率(使用率)も出ます。',
+  fields: [
+    {id: 'ph', l: '相', t: 'sel', o: PH, d: '3'},
+    {id: 's', l: '定格容量', u: 'kVA', d: 300},
+    {id: 'v1', l: '1次電圧', u: 'V', d: 6600},
+    {id: 'v2', l: '2次電圧', u: 'V', d: 210},
+    {id: 'il', l: '2次の実測電流(最大相)', u: 'A', d: 500}
+  ],
+  calc(v) {
+    const k = v.ph === '3' ? SQ3 : 1, I1 = v.s * 1000 / (k * v.v1), I2 = v.s * 1000 / (k * v.v2), lr = v.il / I2 * 100;
+    return {
+      tiles: [tile('1次定格電流', na(I1), 'A', `${v.v1}V側`, 'cu'), tile('2次定格電流', na(I2), 'A', `${v.v2}V側`, 'cu'),
+        tile('負荷率', v.il ? nfix(lr, 1) : '–', '%', v.il ? `${na(v.il)}A ÷ ${na(I2)}A` : '実測電流を入れてください', lr > 100 ? 'ng' : lr > 80 ? '' : 'ok'),
+        tile('実負荷', v.il ? na(k * v.v2 * v.il / 1000) : '–', 'kVA', v.ph === '3' ? '√3 × V2 × 実測電流' : 'V2 × 実測電流'), tile('変圧比', na(v.v1 / v.v2, 2), '', `${v.v1} / ${v.v2}`)],
+      steps: [
+        {b: '1次定格電流', s: `${v.s}kVA × 1000 ÷ (${v.ph === '3' ? '√3 × ' : ''}${v.v1}V)`, v: na(I1) + ' A'},
+        {b: '2次定格電流', s: `${v.s}kVA × 1000 ÷ (${v.ph === '3' ? '√3 × ' : ''}${v.v2}V)`, v: na(I2) + ' A'},
+        {op: '→', b: '負荷率', s: '実測電流 ÷ 2次定格電流', v: v.il ? nfix(lr, 1) + ' %' : '–', cls: 'total'}
+      ],
+      notes: ['単相3線式(105/210V)の変圧器は、2次電圧に210Vを入れると外線の定格電流になります(平衡負荷の場合)。', '負荷率が80%を超えると温度上昇に注意、100%を超えると過負荷です。']
+    };
+  }
+});
+
+addTool({
+  id: 'treff', g: '変圧器', name: '変圧器の損失と効率',
+  desc: '無負荷損(鉄損)と負荷損(銅損)から、負荷率ごとの損失・効率と年間の損失電力量を求めます。損失値は銘板か試験成績書の値を入れてください。',
+  fields: [
+    {id: 'pre', l: '損失の値', t: 'sel', d: '3|300', o: [['manual', '銘板・成績書の値を入力']].concat(
+      Object.keys(TR_REP[3]).map(k => [`3|${k}`, `代表値 三相${k}kVA`]), Object.keys(TR_REP[1]).map(k => [`1|${k}`, `代表値 単相${k}kVA`]))},
+    {id: 's', l: '定格容量', u: 'kVA', d: 300, show: v => v.pre === 'manual'},
+    {id: 'pi', l: '無負荷損(鉄損)', u: 'W', d: 465, show: v => v.pre === 'manual'},
+    {id: 'pc', l: '負荷損(定格時の銅損)', u: 'W', d: 2510, show: v => v.pre === 'manual'},
+    {id: 'lr', l: '負荷率', u: '%', d: 50},
+    {id: 'pf', l: '負荷の力率', u: '(0〜1)', d: 0.85, step: 0.01},
+    {id: 'h', l: '年間の通電時間', u: 'h', d: 8760},
+    {id: 'yen', l: '電力量単価', u: '円/kWh', d: 20}
+  ],
+  calc(v) {
+    if (v.pre !== 'manual') { const [ph, k] = v.pre.split('|'); v = Object.assign({}, v, {s: +k, pi: TR_REP[ph][k][0], pc: TR_REP[ph][k][1]}); }
+    const a = v.lr / 100, P = v.s * a * v.pf, L = v.pi + a * a * v.pc, eta = P * 1000 / (P * 1000 + L) * 100;
+    const am = Math.sqrt(v.pi / v.pc), Pm = v.s * am * v.pf, etam = Pm * 1000 / (Pm * 1000 + 2 * v.pi) * 100;
+    const kwh = L * v.h / 1000, pr = v.pc / (v.s * 1000) * 100;
+    const rows = [25, 50, 75, 100].map(x => { const b = x / 100, p = v.s * b * v.pf, l = v.pi + b * b * v.pc; return [x + '%', na(p), na(l, 0), nfix(p * 1000 / (p * 1000 + l) * 100, 2)]; });
+    return {
+      tiles: [tile('効率', nfix(eta, 2), '%', `負荷率${v.lr}%・力率${v.pf}`, 'cu'), tile('損失', na(L, 0), 'W', `鉄損 ${v.pi} + 銅損 ${na(a * a * v.pc, 0)}`),
+        tile('年間損失電力量', na(kwh, 0), 'kWh', `約 ${na(kwh * v.yen, 0)} 円/年`), tile('最高効率の負荷率', nfix(am * 100, 1), '%', `効率 ${nfix(etam, 2)}%(鉄損 = 銅損)`),
+        tile('%抵抗 %R', nfix(pr, 2), '%', '負荷損 ÷ 容量(短絡計算に使えます)')],
+      steps: [
+        {b: '出力', s: `${v.s}kVA × ${v.lr}% × ${v.pf}`, v: na(P) + ' kW'},
+        {op: '+', b: '損失', s: `鉄損 ${v.pi}W + 銅損 ${v.pc}W × (${a})²`, v: na(L, 0) + ' W'},
+        {op: '→', b: '効率', s: '出力 ÷ (出力 + 損失)', v: nfix(eta, 2) + ' %', cls: 'total'}
+      ],
+      table: {h: '負荷率ごとの効率', head: ['負荷率', '出力 kW', '損失 W', '効率 %'], rows},
+      notes: ['鉄損は負荷に関係なく一定、銅損は負荷率の2乗に比例します。最高効率は鉄損と銅損が等しくなる負荷率です。', '代表値は三菱電機 油入変圧器 Rシリーズ(50Hz、トップランナー2014品)のカタログ値です。2026年度以降の新品はさらに損失が小さく、実際は銘板・試験成績書の値を使ってください。']
+    };
+  }
+});
+
+// ---------- 計量・点検 ----------
+addTool({
+  id: 'meter', g: '試験・点検', name: '電力量計の乗率と使用電力量',
+  desc: 'VT比・CT比から乗率を求め、指示数の差から使用電力量と平均電力を出します。',
+  fields: [
+    {id: 'vt', l: 'VT比', t: 'sel', d: '60', o: [['60', '6600/110V(60)'], ['30', '3300/110V(30)'], ['1', 'VTなし(低圧)']]},
+    {id: 'ct', l: 'CT比', t: 'sel', d: '10', o: CT_LIST.map(c => [String(c / 5), `${c}/5A(${c / 5})`]).concat([['1', 'CTなし']])},
+    {id: 'mk', l: '計器の倍率', u: '(銘板)', d: 1},
+    {id: 'r0', l: '前回の指示数', u: 'kWh', d: 1234.5},
+    {id: 'r1', l: '今回の指示数', u: 'kWh', d: 1289.3},
+    {id: 'days', l: '期間', u: '日', d: 30}
+  ],
+  calc(v) {
+    const mul = (+v.vt) * (+v.ct) * v.mk, dr = v.r1 - v.r0, kwh = dr * mul, avg = kwh / (v.days * 24);
+    return {
+      tiles: [tile('乗率', na(mul, 2), '倍', `${v.vt} × ${v.ct}${v.mk !== 1 ? ' × ' + v.mk : ''}`, 'cu'), tile('使用電力量', na(kwh, 1), 'kWh', `指示数の差 ${na(dr, 2)} × 乗率`),
+        tile('平均電力', na(avg), 'kW', `${v.days}日 × 24時間で割った値`), tile('1日あたり', na(kwh / v.days, 1), 'kWh/日')],
+      steps: [
+        {b: '乗率', s: `VT比 ${v.vt} × CT比 ${v.ct} × 計器倍率 ${v.mk}`, v: na(mul, 2)},
+        {op: '×', b: '指示数の差', s: `${v.r1} − ${v.r0}`, v: na(dr, 2)},
+        {op: '=', b: '使用電力量', v: na(kwh, 1) + ' kWh', cls: 'total'}
+      ],
+      notes: ['デマンド(30分最大需要電力)は、30分間の使用電力量 × 2 で kW になります。', '計器に「乗率」が表示されている場合は、その値を優先してください。']
+    };
+  }
+});
+
+// ---------- 負荷・電線 ----------
+addTool({
+  id: 'motor', g: '負荷・電線', name: '電動機の電流と始動電流',
+  desc: '出力(kWまたは馬力)から定格電流の概算、始動電流、電線に必要な許容電流(電技解釈 第148条)を求めます。',
+  fields: [
+    {id: 'unit', l: '出力の単位', t: 'sel', d: 'kW', o: [['kW', 'kW'], ['PS', '馬力(PS・仏馬力)'], ['HP', '馬力(HP・英馬力)']]},
+    {id: 'p', l: '出力', u: '', d: 7.5},
+    {id: 'ph', l: '相', t: 'sel', o: PH, d: '3'},
+    {id: 'v', l: '電圧', u: 'V', d: 200},
+    {id: 'eff', l: '効率', u: '%', d: 88},
+    {id: 'pf', l: '力率', u: '(0〜1)', d: 0.84, step: 0.01},
+    {id: 'st', l: '始動方式', t: 'sel', d: 'dol', o: [['dol', '直入れ'], ['yd', 'スターデルタ(1/3)'], ['inv', 'インバータ']]},
+    {id: 'sm', l: '直入れ始動電流の倍率', u: '倍', d: 6}
+  ],
+  calc(v) {
+    const kw = v.unit === 'kW' ? v.p : v.p * (v.unit === 'PS' ? 0.7355 : 0.7457);
+    const k = v.ph === '3' ? SQ3 : 1, I = kw * 1000 / (k * v.v * v.eff / 100 * v.pf);
+    const ist = v.st === 'dol' ? I * v.sm : v.st === 'yd' ? I * v.sm / 3 : I * 1.5;
+    const Iw = I <= 50 ? I * 1.25 : I * 1.1;
+    const kva = kw / (v.eff / 100) / v.pf;
+    return {
+      tiles: [tile('定格電流(概算)', na(I), 'A', '出力 ÷ (√3 × V × 効率 × 力率)', 'cu'), tile('始動電流', na(ist, 0), 'A', v.st === 'dol' ? `定格 × ${v.sm}倍` : v.st === 'yd' ? '直入れの1/3' : '定格の1.5倍程度'),
+        tile('電線に必要な許容電流', na(Iw), 'A', I <= 50 ? '50A以下なので × 1.25' : '50A超なので × 1.1'), tile('入力', na(kva), 'kVA', `${na(kw)}kW ÷ 効率 ÷ 力率`),
+        tile('出力(kW)', na(kw, 2), 'kW', v.unit === 'kW' ? '' : `${v.p}${v.unit} × ${v.unit === 'PS' ? '0.7355' : '0.7457'}`)],
+      steps: [
+        {b: '出力', v: na(kw, 2) + ' kW'},
+        {op: '÷', b: `${v.ph === '3' ? '√3 × ' : ''}電圧 × 効率 × 力率`, s: `${v.ph === '3' ? '1.732 × ' : ''}${v.v} × ${v.eff}% × ${v.pf}`, v: na(k * v.v * v.eff / 100 * v.pf / 1000, 3) + ' kVA/A'},
+        {op: '=', b: '定格電流', v: na(I) + ' A', cls: 'total'}
+      ],
+      notes: ['効率・力率の初期値は200V級かご形の目安です。実際は銘板の定格電流を使ってください。', '電線の太さは「負荷から選定」タブで負荷の種類を「電動機」にすると、許容電流と電圧降下の両方で選べます。']
+    };
+  }
+});
+
+addTool({
+  id: 'pfc', g: '負荷・電線', name: '力率改善コンデンサの容量',
+  desc: '改善前と目標の力率から必要なコンデンサ容量を求め、標準容量を選んだときの改善後の力率・電流の減り方を出します。',
+  fields: [
+    {id: 'p', l: '負荷の有効電力', u: 'kW', d: 200},
+    {id: 'pf1', l: '改善前の力率', u: '(0〜1)', d: 0.8, step: 0.01},
+    {id: 'pf2', l: '目標の力率', u: '(0〜1)', d: 0.95, step: 0.01},
+    {id: 'kwc', l: '契約電力(割引計算用)', u: 'kW', d: 200},
+    {id: 'bu', l: '基本料金単価', u: '円/kW・月', d: 1800}
+  ],
+  calc(v) {
+    const t1 = Math.tan(Math.acos(v.pf1)), t2 = Math.tan(Math.acos(v.pf2)), Qc = v.p * (t1 - t2);
+    const list = PFC_HV;
+    const pick = upStd(Qc, list);
+    const Q2 = v.p * t1 - (pick || 0), pfn = v.p / Math.hypot(v.p, Q2);
+    const ired = (1 - v.pf1 / pfn) * 100, lred = (1 - (v.pf1 / pfn) ** 2) * 100;
+    const pfr = x => Math.min(100, Math.round(x * 100)), f1 = (185 - pfr(v.pf1)) / 100, f2x = (185 - pfr(pick ? pfn : v.pf2)) / 100;
+    const save = v.kwc * v.bu * (f1 - f2x) * 12;
+    return {
+      tiles: [tile('必要な容量', na(Qc), 'kvar', 'P × (tanθ1 − tanθ2)', 'cu'), tile('標準容量', pick ? pick : '–', pick ? 'kvar' : '', pick ? '必要容量以上で最小' : '系列の最大を超えます。複数台で組み合わせてください', 'ok'),
+        tile('改善後の力率', pick ? nfix(pfn * 100, 1) : '–', '%', Q2 < 0 ? '進み力率(過補償)' : '遅れ'), tile('電流の減少', pick ? nfix(ired, 1) : '–', '%', '同じkWでの線電流'),
+        tile('線路損失の減少', pick ? nfix(lred, 1) : '–', '%', '損失は電流の2乗に比例'),
+        tile('基本料金の差(年間)', v.kwc && v.bu ? na(save, 0) : '–', v.kwc && v.bu ? '円' : '', `係数 ${nfix(f1, 2)} → ${nfix(f2x, 2)}(力率85%基準)`, 'ok')],
+      steps: [
+        {b: 'tanθ1(改善前)', s: `cosθ1 = ${v.pf1}`, v: nfix(t1, 3)},
+        {b: 'tanθ2(目標)', s: `cosθ2 = ${v.pf2}`, v: nfix(t2, 3)},
+        {op: '→', b: '必要容量 Qc', s: `${v.p}kW × (${nfix(t1, 3)} − ${nfix(t2, 3)})`, v: na(Qc) + ' kvar', cls: 'total'}
+      ],
+      notes: [PFC_NOTE, '基本料金は 基本料金単価 × 契約電力 × (185 − 力率) ÷ 100 で、力率85%より1%よいごとに1%割引、悪いと割増しです(東京電力EPの高圧約款で確認。力率は8時〜22時の平均で、1%単位に四捨五入、上限100%)。他の電力会社も同じ考え方ですが、契約先の約款で確認してください。']
+    };
+  }
+});
+
+// ---------- 画面 ----------
+function toolVals(t) {
+  const st = (S.tv = S.tv || {})[t.id] = S.tv[t.id] || {};
+  const v = {};
+  for (const f of t.fields) { const x = st[f.id]; v[f.id] = x !== undefined ? x : f.d; if (f.t !== 'sel') v[f.id] = +v[f.id]; }
+  return v;
+}
+function curTool() { return TOOLS.find(t => t.id === S.tool) || TOOLS[0]; }
+function renderToolMenu() {
+  const t = curTool(), groups = [];
+  for (const x of TOOLS) { let g = groups.find(g => g.n === x.g); if (!g) groups.push(g = {n: x.g, items: []}); g.items.push(x); }
+  groups.sort((a, b) => GORDER.indexOf(a.n) - GORDER.indexOf(b.n));
+  $('#tool-list').innerHTML = groups.map(g => `<div class="tg">${esc(g.n)}</div>` + g.items.map(x => `<button type="button" data-id="${x.id}" aria-current="${x.id === t.id}">${esc(x.name)}</button>`).join('')).join('');
+  $('#tool-sel').innerHTML = groups.map(g => `<optgroup label="${esc(g.n)}">` + g.items.map(x => `<option value="${x.id}"${x.id === t.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('') + '</optgroup>').join('');
+}
+function renderToolForm() {
+  const t = curTool(), v = toolVals(t);
+  $('#tool-group').textContent = t.g;
+  $('#tool-title').textContent = t.name;
+  $('#tool-desc').textContent = t.desc;
+  $('#tool-form').innerHTML = t.fields.filter(f => !f.show || f.show(v)).map(f => {
+    const id = `tf-${t.id}-${f.id}`;
+    if (f.t === 'sel') return `<div class="field"><label class="lbl" for="${id}">${esc(f.l)}</label><select id="${id}" data-f="${f.id}">${f.o.map(([ov, ol]) => `<option value="${esc(ov)}"${String(ov) === String(v[f.id]) ? ' selected' : ''}>${esc(ol)}</option>`).join('')}</select></div>`;
+    return `<div class="field"><label class="lbl" for="${id}">${esc(f.l)}${f.u ? ` <span class="unit">${esc(f.u)}</span>` : ''}</label><input id="${id}" data-f="${f.id}" type="number" inputmode="decimal" step="${f.step || 'any'}" value="${v[f.id]}"></div>`;
+  }).join('');
+}
+function renderToolOut() {
+  const t = curTool(), v = toolVals(t);
+  let r;
+  try { r = t.calc(v) || {}; } catch (e) { r = {warn: '計算できません: ' + e.message}; }
+  const ok = !r.warn && r.tiles && r.tiles.every(x => x.v !== 'NaN');
+  $('#tool-tiles').innerHTML = r.warn ? `<div class="kv bad"><span class="k">確認してください</span><span class="d" style="font-size:.9rem;color:var(--ng)">${esc(r.warn)}</span></div>`
+    : (r.tiles || []).map(x => `<div class="kv${x.cls === 'cu' ? ' hl' : ''}"><span class="k">${esc(x.k)}</span><span class="v ${x.cls || ''}">${x.v}${x.u ? `<small>${esc(x.u)}</small>` : ''}</span>${x.d ? `<span class="d">${x.d}</span>` : ''}</div>`).join('');
+  $('#tool-fig-panel').hidden = !(ok && r.fig);
+  if (ok && r.fig) $('#tool-fig').innerHTML = r.fig;
+  $('#tool-table-panel').hidden = !(ok && r.table);
+  if (ok && r.table) {
+    $('#tool-table-h').textContent = r.table.h;
+    $('#tool-table').innerHTML = `<thead><tr>${r.table.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>` +
+      r.table.rows.map((row, i) => `<tr class="${r.table.hl === i ? 'sel' : ''}">${row.map((c, j) => `<td class="${j === 0 && isNaN(parseFloat(c)) ? 'jp' : ''}">${c}</td>`).join('')}</tr>`).join('') + '</tbody>';
+  }
+  $('#tool-steps-panel').hidden = !(ok && r.steps);
+  if (ok && r.steps) $('#tool-steps').innerHTML = stepsHTML(r.steps);
+  $('#tool-notes').innerHTML = (r.notes || []).map(n => `<p>${n}</p>`).join('');
+  $('#tool-notes').hidden = !(r.notes && r.notes.length);
+}
+function renderTools() { renderToolMenu(); renderToolForm(); renderToolOut(); }
+function setTool(id) { S.tool = id; save(); renderTools(); if (matchMedia('(max-width:860px)').matches) $('#view-tools').scrollIntoView({block: 'start'}); }
+$('#tool-list').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) setTool(b.dataset.id); };
+$('#tool-sel').onchange = e => setTool(e.target.value);
+$('#tool-form').addEventListener('input', e => {
+  const f = e.target.dataset.f; if (!f) return;
+  const t = curTool(), st = S.tv[t.id];
+  if (e.target.tagName === 'SELECT') { st[f] = e.target.value; save(); renderToolForm(); renderToolOut(); return; }
+  const x = parseFloat(e.target.value); if (!isFinite(x)) return;
+  st[f] = x; save(); renderToolOut();
+});
+
+// ===== 電気計算ツール(ケーブル定数を使うもの) =====
+// ケーブル定数(Ω/km・μF/km)。出典: SFCC(昭和電線・古河)・フジクラ・ダイヤ・住電HST・北日本電線のカタログ(日本電線工業会 技資103号A)
+// r = 90℃ 交流導体抵抗、x = リアクタンス、c = 1心あたり静電容量
+const CAB = {
+  hvCVT: {name: '6.6kV CVT', kv: 6.6, sizes: [22, 38, 60, 100, 150, 200, 250, 325],
+    r50: [1.08, 0.626, 0.397, 0.239, 0.159, 0.120, 0.0977, 0.0759], r60: [1.08, 0.626, 0.397, 0.239, 0.159, 0.121, 0.0984, 0.0768],
+    x50: [0.135, 0.124, 0.115, 0.107, 0.102, 0.100, 0.0975, 0.0941], x60: [0.162, 0.149, 0.138, 0.129, 0.122, 0.120, 0.117, 0.113],
+    c: [0.27, 0.32, 0.37, 0.45, 0.52, 0.51, 0.55, 0.61]},
+  hvCV3: {name: '6.6kV CV 3心', kv: 6.6, sizes: [8, 14, 22, 38, 60, 100, 150, 200, 250, 325],
+    r50: [2.98, 1.71, 1.08, 0.626, 0.397, 0.239, 0.159, 0.120, 0.0981, 0.0764], r60: [2.98, 1.71, 1.08, 0.626, 0.397, 0.239, 0.159, 0.121, 0.0989, 0.0775],
+    x50: [0.135, 0.128, 0.119, 0.109, 0.101, 0.0935, 0.0885, 0.0876, 0.0852, 0.0825], x60: [0.162, 0.153, 0.143, 0.130, 0.121, 0.112, 0.106, 0.105, 0.102, 0.0990],
+    c: [0.21, 0.24, 0.27, 0.32, 0.37, 0.45, 0.52, 0.51, 0.55, 0.61]},
+  lvCVT: {name: '600V CVT', kv: 0.6, sizes: [8, 14, 22, 38, 60, 100, 150, 200, 250, 325],
+    r50: [3.01, 1.71, 1.08, 0.626, 0.397, 0.239, 0.159, 0.121, 0.0981, 0.0764], r60: [3.01, 1.71, 1.08, 0.626, 0.397, 0.240, 0.160, 0.121, 0.0989, 0.0775],
+    x50: [0.114, 0.107, 0.103, 0.0955, 0.0913, 0.0881, 0.0846, 0.0859, 0.0836, 0.0816], x60: [0.137, 0.128, 0.123, 0.115, 0.110, 0.106, 0.102, 0.103, 0.100, 0.0980]},
+  lvCV: {name: '600V CV 2心・3心', kv: 0.6, sizes: [2, 3.5, 5.5, 8, 14, 22, 38, 60, 100, 150, 200, 250, 325],
+    r50: [12.0, 6.76, 4.34, 3.01, 1.71, 1.08, 0.626, 0.397, 0.239, 0.160, 0.121, 0.0985, 0.0770], r60: [12.0, 6.76, 4.34, 3.01, 1.71, 1.08, 0.627, 0.397, 0.240, 0.160, 0.122, 0.0995, 0.0783],
+    x50: [0.0992, 0.0914, 0.0914, 0.0870, 0.0828, 0.0820, 0.0771, 0.0768, 0.0773, 0.0744, 0.0755, 0.0739, 0.0723], x60: [0.119, 0.110, 0.110, 0.104, 0.0994, 0.0984, 0.0925, 0.0922, 0.0928, 0.0893, 0.0906, 0.0887, 0.0867]}
+};
+const CAB_SRC = 'ケーブル定数はSFCC(昭和電線・古河)・フジクラ・ダイヤ・住電HST・北日本電線のカタログ値(90℃の交流導体抵抗)です。';
+// 「種類|サイズ」の選択肢
+function cabOpts(keys, withManual) {
+  const o = [];
+  for (const k of keys) for (const s of CAB[k].sizes) o.push([`${k}|${s}`, `${CAB[k].name} ${s}mm²`]);
+  if (withManual) o.push(['manual', 'R・Xを直接入力']);
+  return o;
+}
+function cabRX(key, f) {
+  if (!key || key === 'manual' || key === 'none') return null;
+  const [k, s] = key.split('|'), c = CAB[k], i = c.sizes.indexOf(+s);
+  return {name: `${c.name} ${s}mm²`, r: c['r' + f][i], x: c['x' + f][i], c: c.c ? c.c[i] : null, size: +s};
+}
+const FREQ = [['50', '50Hz(東日本)'], ['60', '60Hz(西日本)']];
+
+// ---------- 短絡・地絡・保護 ----------
+addTool({
+  id: 'short', g: '短絡・地絡・保護', name: '三相短絡電流(%インピーダンス法)',
+  desc: '受電点の短絡電流(または%Z)に、高圧ケーブル・変圧器・低圧ケーブルの%Zを足して、各点の三相短絡電流と短絡容量を求めます。基準容量は10MVAです。',
+  fields: [
+    {id: 'f', l: '周波数', t: 'sel', o: FREQ, d: '60'},
+    {id: 'src', l: '受電点の値', t: 'sel', d: 'ka', o: [['ka', '三相短絡電流(kA)で入力'], ['pz', '%R・%X(10MVA基準)で入力']]},
+    {id: 'ika', l: '受電点の三相短絡電流', u: 'kA', d: 12.5, show: v => v.src === 'ka'},
+    {id: 'pr', l: '受電点 %R', u: '%', d: 1.0, show: v => v.src === 'pz'},
+    {id: 'px', l: '受電点 %X', u: '%', d: 5.0, show: v => v.src === 'pz'},
+    {id: 'hc', l: '高圧ケーブル', t: 'sel', d: 'hvCVT|38', o: [['none', 'なし']].concat(cabOpts(['hvCVT', 'hvCV3']))},
+    {id: 'hl', l: '高圧ケーブルのこう長', u: 'm', d: 50, show: v => v.hc !== 'none'},
+    {id: 'ts', l: '変圧器容量(三相)', u: 'kVA', d: 300},
+    {id: 'tz', l: '変圧器 %Z', u: '%(自己容量基準)', d: 3.0, step: 0.1},
+    {id: 'tpc', l: '変圧器 負荷損', u: 'W(%R計算用)', d: 2510},
+    {id: 'v2', l: '2次電圧', u: 'V', d: 210},
+    {id: 'lc', l: '低圧ケーブル', t: 'sel', d: 'lvCVT|150', o: [['none', 'なし']].concat(cabOpts(['lvCVT', 'lvCV']))},
+    {id: 'll', l: '低圧ケーブルのこう長', u: 'm', d: 30, show: v => v.lc !== 'none'}
+  ],
+  calc(v) {
+    const Pb = 10; // MVA
+    const zOhm = (ohm, kv) => ohm * Pb / (kv * kv) * 100; // Ω → %(10MVA基準)
+    let sr, sx;
+    if (v.src === 'ka') { sr = 0; sx = Pb / (SQ3 * 6.6 * v.ika) * 100; } else { sr = v.pr; sx = v.px; }
+    const pts = [], add = (name, r, x, kv) => pts.push({name, r, x, kv});
+    let R = sr, X = sx;
+    add('① 受電点', R, X, 6.6);
+    const hc = cabRX(v.hc, v.f);
+    let hr = 0, hx = 0;
+    if (hc) { hr = zOhm(hc.r * v.hl / 1000, 6.6); hx = zOhm(hc.x * v.hl / 1000, 6.6); R += hr; X += hx; add('② 変圧器1次(高圧ケーブル末端)', R, X, 6.6); }
+    const k = Pb * 1000 / v.ts, trr = v.tpc / (v.ts * 1000) * 100;
+    if (trr >= v.tz) return {warn: '変圧器の負荷損が大きすぎます(%R が %Z を超えます)。値を確認してください。'};
+    const trx = Math.sqrt(v.tz ** 2 - trr ** 2);
+    R += trr * k; X += trx * k; add('③ 変圧器2次端子', R, X, v.v2 / 1000);
+    const lc = cabRX(v.lc, v.f);
+    let lr = 0, lx = 0;
+    if (lc) { lr = zOhm(lc.r * v.ll / 1000, v.v2 / 1000); lx = zOhm(lc.x * v.ll / 1000, v.v2 / 1000); R += lr; X += lx; add('④ 低圧ケーブル末端', R, X, v.v2 / 1000); }
+    for (const p of pts) { p.z = Math.hypot(p.r, p.x); p.is = Pb * 1000 / (SQ3 * p.kv) * 100 / p.z / 1000; p.mva = Pb * 100 / p.z; }
+    const hvEnd = pts[hc ? 1 : 0], tr2 = pts.find(p => p.name.startsWith('③')), last = pts[pts.length - 1];
+    const mccb = [2.5, 5, 10, 15, 25, 30, 35, 50, 65, 85, 100, 125];
+    const need = upStd(last.is, mccb);
+    return {
+      tiles: [tile('受電点', nfix(pts[0].is, 2), 'kA', `短絡容量 ${na(pts[0].mva)}MVA`),
+        tile('変圧器1次', nfix(hvEnd.is, 2), 'kA', hvEnd.is <= 12.5 ? 'VCB・PF 12.5kA 以内' : '12.5kA を超えます', hvEnd.is <= 12.5 ? 'ok' : 'ng'),
+        tile('変圧器2次端子', nfix(tr2.is, 1), 'kA', `2相短絡 ${nfix(tr2.is * SQ3 / 2, 1)}kA`, 'cu'),
+        tile(lc ? '低圧ケーブル末端' : '低圧側', nfix(last.is, 1), 'kA', need ? `遮断容量 ${need}kA 以上の遮断器` : '遮断容量の大きい遮断器が必要')],
+      table: {h: '各点の%インピーダンス(10MVA基準)と短絡電流', head: ['地点', '%R', '%X', '%Z', '三相短絡 kA', '短絡容量 MVA'],
+        rows: pts.map(p => [p.name, nfix(p.r, 2), nfix(p.x, 2), nfix(p.z, 2), nfix(p.is, 2), na(p.mva)])},
+      steps: [
+        {b: '受電点', s: v.src === 'ka' ? `10MVA ÷ (√3 × 6.6kV × ${v.ika}kA) × 100(全量を%Xとして扱う)` : '入力値', v: `${nfix(sr, 2)} + j${nfix(sx, 2)} %`},
+        hc ? {op: '+', b: '高圧ケーブル', s: `${hc.name} ${v.hl}m: R ${hc.r}・X ${hc.x} Ω/km × ${v.hl / 1000}km × 10 ÷ 6.6² × 100`, v: `${nfix(hr, 3)} + j${nfix(hx, 3)} %`} : null,
+        {op: '+', b: '変圧器', s: `%R = ${v.tpc}W ÷ ${v.ts}kVA = ${nfix(trr, 2)}%、%X = √(${v.tz}² − %R²) = ${nfix(trx, 2)}%、× 10,000 ÷ ${v.ts}`, v: `${nfix(trr * k, 2)} + j${nfix(trx * k, 2)} %`},
+        lc ? {op: '+', b: '低圧ケーブル', s: `${lc.name} ${v.ll}m × 10 ÷ ${(v.v2 / 1000)}² × 100`, v: `${nfix(lr, 2)} + j${nfix(lx, 2)} %`} : null,
+        {op: '→', b: '短絡電流', s: `基準電流 ÷ %Z × 100(基準電流 = 10MVA ÷ (√3 × V))`, v: nfix(last.is, 2) + ' kA', cls: 'total'}
+      ].filter(Boolean),
+      notes: ['受電点の短絡電流や%Zは電力会社から提示される値を使ってください。わからない場合、6.6kV配電線は12.5kAで検討するのが一般的です(キュービクルのJIS C 4620も系統短絡電流12.5kA以下が前提)。', '変圧器の%Zは銘板値を入れてください。油入300kVAの%Zは2.2〜4.1%程度と幅があり、遮断器の検討では小さめの%Z(=短絡電流が大きい側)で確かめるのが安全です。', '電動機からの寄与電流と、ケーブルの温度による抵抗変化は考えていません。' + CAB_SRC]
+    };
+  }
+});
+
+addTool({
+  id: 'charge', g: '短絡・地絡・保護', name: '高圧ケーブルの充電電流(GR・DGRの検討)',
+  desc: '構内の高圧ケーブルの静電容量から、平常時の充電電流と、構外で1線地絡が起きたときに流れ出す零相電流を求めます。地絡継電器の不要動作(もらい事故)の検討に使います。',
+  fields: [
+    {id: 'f', l: '周波数', t: 'sel', o: FREQ, d: '60'},
+    {id: 'c1', l: 'ケーブル1', t: 'sel', d: 'hvCVT|38', o: cabOpts(['hvCVT', 'hvCV3'])},
+    {id: 'l1', l: 'ケーブル1のこう長', u: 'm', d: 120},
+    {id: 'c2', l: 'ケーブル2', t: 'sel', d: 'none', o: [['none', 'なし']].concat(cabOpts(['hvCVT', 'hvCV3']))},
+    {id: 'l2', l: 'ケーブル2のこう長', u: 'm', d: 0, show: v => v.c2 !== 'none'},
+    {id: 'gr', l: '地絡継電器の整定', u: 'A', d: 0.2, step: 0.1}
+  ],
+  calc(v) {
+    const w = 2 * Math.PI * (+v.f), E = 6600 / SQ3;
+    const list = [[v.c1, v.l1], [v.c2, v.l2]].map(([k, l]) => ({c: cabRX(k, v.f), l})).filter(x => x.c && x.l > 0);
+    const Ctot = list.reduce((a, x) => a + x.c.c * x.l / 1000, 0); // μF(1心あたり)
+    const Ic = w * Ctot * 1e-6 * E, Ig = 3 * Ic, ratio = Ig / v.gr;
+    return {
+      tiles: [tile('静電容量(1心)', nfix(Ctot, 4), 'μF', list.map(x => `${x.c.name} ${x.l}m`).join(' + ')),
+        tile('平常時の充電電流(1相)', na(Ic, 3), 'A', 'ω × C × E'),
+        tile('1線地絡時の零相電流', na(Ig, 3), 'A', '3 × ω × C × E(完全地絡)', 'cu'),
+        tile('整定値との比', nfix(ratio * 100, 0), '%', ratio >= 0.5 ? '無方向GRは構外事故で動くおそれ。DGRを検討' : '無方向GRでも余裕あり', ratio >= 0.5 ? 'ng' : 'ok')],
+      steps: [
+        {b: '静電容量', s: list.map(x => `${x.c.c}μF/km × ${x.l / 1000}km`).join(' + '), v: nfix(Ctot, 4) + ' μF'},
+        {op: '×', b: 'ω × E', s: `2π × ${v.f}Hz × 6,600V ÷ √3`, v: na(w * E, 0)},
+        {op: '=', b: '充電電流(1相)', v: na(Ic, 3) + ' A'},
+        {op: '×3', b: '1線地絡時の零相電流', v: na(Ig, 3) + ' A', cls: 'total'}
+      ],
+      notes: ['地絡継電器(ZCT)より負荷側にあるケーブルの長さを入れてください。静電容量はカタログの1心あたりの値です。', '「整定値との比」が50%以上を DGR 検討の目安として表示しています。これはアプリ上の目安で、法令の基準ではありません。高圧受電設備規程と電力会社との協議で判断してください。', '地絡が不完全(地絡抵抗あり)のときは零相電圧が下がり、電流も比例して小さくなります。']
+    };
+  }
+});
+
+addTool({
+  id: 'sct', g: '短絡・地絡・保護', name: 'ケーブルの短絡時許容電流',
+  desc: '短絡電流が流れたとき、ケーブルの導体が許容温度を超えないかを確かめます。I = K × A ÷ √t(断熱計算、銅導体)。',
+  fields: [
+    {id: 'ins', l: '絶縁体', t: 'sel', d: 'xlpe', o: [['xlpe', '架橋ポリエチレン(CV・CVT)90→230℃'], ['pvc', 'ビニル(IV・VV)60→120℃'], ['hpvc', '耐熱ビニル(HIV)75→120℃'], ['pe', 'ポリエチレン(EM-IE等)75→140℃'], ['epr', 'EPゴム(PNCT等)80→230℃']]},
+    {id: 'a', l: '導体断面積', u: 'mm²', d: 38},
+    {id: 't', l: '短絡継続時間', u: '秒', d: 0.2, step: 0.05},
+    {id: 'is', l: '想定短絡電流', u: 'kA', d: 12.5}
+  ],
+  calc(v) {
+    const K = {xlpe: 134, pvc: 97, hpvc: 83, pe: 98, epr: 140}[v.ins];
+    const I = K * v.a / Math.sqrt(v.t) / 1000, ok = I >= v.is, amin = v.is * 1000 * Math.sqrt(v.t) / K;
+    return {
+      tiles: [tile('短絡時許容電流', nfix(I, 2), 'kA', `K = ${K}`, 'cu'), tile('判定', ok ? '耐えられる' : '超える', '', `想定 ${v.is}kA`, ok ? 'ok' : 'ng'),
+        tile('必要な断面積', na(amin, 1), 'mm²', `${v.is}kA・${v.t}秒に耐える最小`)],
+      steps: [{b: 'K × A', s: `${K} × ${v.a}mm²`, v: na(K * v.a, 0)}, {op: '÷', b: '√t', s: `√${v.t}秒`, v: nfix(Math.sqrt(v.t), 3)}, {op: '=', b: '許容電流', v: nfix(I, 2) + ' kA', cls: 'total'}],
+      notes: ['K は JCS 0168-1 の断熱式による値(SFCC・住電HST・北日本電線のカタログ)。ビニルは北日本電線が96とする資料もあります。', '継続時間は保護装置(VCB・OCR、PF)の遮断時間を入れてください。PFは限流するので実際の通過エネルギーはさらに小さくなります。', 'ケーブルの遮へい銅テープの地絡時許容電流は、この計算では確かめていません。']
+    };
+  }
+});
+
+// ---------- 負荷・電線 ----------
+const SYS3 = [['3', '三相3線式'], ['1', '単相2線式'], ['13', '単相3線式(外線−中性線)']];
+addTool({
+  id: 'vdrop', g: '負荷・電線', name: '電圧降下(抵抗・リアクタンスで計算)',
+  desc: 'ケーブルの抵抗とリアクタンス、負荷の力率から電圧降下を求めます。高圧ケーブルや太い低圧幹線では簡易式より正確です。',
+  fields: [
+    {id: 'sys', l: '電気方式', t: 'sel', o: SYS3, d: '3'},
+    {id: 'v', l: '送り出し電圧', u: 'V', d: 210},
+    {id: 'i', l: '負荷電流', u: 'A', d: 200},
+    {id: 'pf', l: '力率', u: '(0〜1)', d: 0.85, step: 0.01},
+    {id: 'len', l: 'こう長', u: 'm', d: 60},
+    {id: 'f', l: '周波数', t: 'sel', o: FREQ, d: '60'},
+    {id: 'cab', l: 'ケーブル', t: 'sel', d: 'lvCVT|60', o: cabOpts(['lvCVT', 'lvCV', 'hvCVT', 'hvCV3'], true)},
+    {id: 'r', l: '抵抗', u: 'Ω/km', d: 0.397, show: v => v.cab === 'manual'},
+    {id: 'x', l: 'リアクタンス', u: 'Ω/km', d: 0.11, show: v => v.cab === 'manual'}
+  ],
+  calc(v) {
+    const c = cabRX(v.cab, v.f) || {name: '入力値', r: v.r, x: v.x};
+    const K = v.sys === '3' ? SQ3 : v.sys === '1' ? 2 : 1, sin = Math.sqrt(1 - v.pf ** 2);
+    const e = K * v.i * v.len / 1000 * (c.r * v.pf + c.x * sin), vref = v.sys === '13' ? v.v / 2 : v.v;
+    const simple = {3: 30.8, 1: 35.6, 13: 17.8}[v.sys] * v.len * v.i / (1000 * (c.size || NaN));
+    return {
+      tiles: [tile('電圧降下', na(e, 2), 'V', `${c.name}`, 'cu'), tile('降下率', nfix(e / vref * 100, 2), '%', `${vref}V に対して`),
+        tile('受電端電圧', na(vref - e, 1), 'V', v.sys === '13' ? '外線−中性線間' : '線間'), tile('簡易式での値', c.size ? na(simple, 2) : '–', c.size ? 'V' : '', '内線規程の簡易式(力率1)')],
+      steps: [
+        {b: `係数 K`, s: v.sys === '3' ? '三相3線式 √3' : v.sys === '1' ? '単相2線式 2' : '単相3線式 1', v: nfix(K, 3)},
+        {op: '×', b: '電流 × こう長', s: `${v.i}A × ${v.len / 1000}km`, v: na(v.i * v.len / 1000, 3)},
+        {op: '×', b: 'R cosθ + X sinθ', s: `${c.r} × ${v.pf} + ${c.x} × ${nfix(sin, 3)}`, v: nfix(c.r * v.pf + c.x * sin, 4) + ' Ω/km'},
+        {op: '=', b: '電圧降下', v: na(e, 2) + ' V', cls: 'total'}
+      ],
+      notes: ['e = K × I × L × (R cosθ + X sinθ)。' + CAB_SRC]
+    };
+  }
+});
+
+addTool({
+  id: 'loss', g: '負荷・電線', name: '配線の電力損失',
+  desc: 'ケーブルの抵抗で失われる電力と、年間の損失電力量・電気代を求めます。',
+  fields: [
+    {id: 'sys', l: '電気方式', t: 'sel', o: SYS3, d: '3'},
+    {id: 'i', l: '負荷電流', u: 'A', d: 200},
+    {id: 'len', l: 'こう長', u: 'm', d: 60},
+    {id: 'f', l: '周波数', t: 'sel', o: FREQ, d: '60'},
+    {id: 'cab', l: 'ケーブル', t: 'sel', d: 'lvCVT|60', o: cabOpts(['lvCVT', 'lvCV', 'hvCVT', 'hvCV3'], true)},
+    {id: 'r', l: '抵抗', u: 'Ω/km', d: 0.397, show: v => v.cab === 'manual'},
+    {id: 'h', l: '年間の使用時間', u: 'h', d: 3000},
+    {id: 'yen', l: '電力量単価', u: '円/kWh', d: 20}
+  ],
+  calc(v) {
+    const c = cabRX(v.cab, v.f) || {name: '入力値', r: v.r};
+    const n = v.sys === '3' ? 3 : 2, R = c.r * v.len / 1000, P = n * v.i * v.i * R, kwh = P * v.h / 1000;
+    return {
+      tiles: [tile('電力損失', na(P, 0), 'W', `${c.name}`, 'cu'), tile('年間損失電力量', na(kwh, 0), 'kWh', `${v.h}時間`), tile('年間の電気代', na(kwh * v.yen, 0), '円', `${v.yen}円/kWh`)],
+      steps: [{b: '1線の抵抗', s: `${c.r}Ω/km × ${v.len / 1000}km`, v: nfix(R, 4) + ' Ω'}, {op: '×', b: `${n} × I²`, s: `${n}線 × ${v.i}²`, v: na(n * v.i * v.i, 0)}, {op: '=', b: '電力損失', v: na(P, 0) + ' W', cls: 'total'}],
+      notes: ['単相3線式は平衡負荷(中性線に電流が流れない)として外線2本分で計算しています。抵抗は90℃の値なので、軽負荷では実際の損失は少し小さくなります。']
+    };
+  }
+});
+
+// ===== 電気計算ツール(法令・規格の基準値を使うもの) =====
+// 出典: 電気設備の技術基準の解釈(令和6年10月22日改正版)第1・14・15・16・17条、電技省令第58条、JIS C 4602:2017、JIS C 4902、東京電力EP 電気需給約款
+
+// ---------- 短絡・地絡・保護 ----------
+// JIS C 4602:2017 附属書A 標準特性 t = (L/10) × k ÷ (M^α − 1)
+const OCR_CURVES = {
+  NI: {k: 0.14, a: 0.02, name: '反限時(NI)'},
+  VI: {k: 13.5, a: 1, name: '強反限時(VI)'},
+  EI: {k: 80, a: 2, name: '超反限時(EI)'}
+};
+const ocrT = (c, M, L) => M <= 1 ? Infinity : (L / 10) * c.k / (Math.pow(Math.min(M, 20), c.a) - 1);
+addTool({
+  id: 'ocr', g: '短絡・地絡・保護', name: '過電流継電器(OCR)の動作時間',
+  desc: 'CT比・限時タップ・レバー・特性から、故障電流が流れたときの動作時間を求めます。特性式は JIS C 4602 の標準特性です。',
+  fields: [
+    {id: 'ct', l: 'CT比', t: 'sel', d: '10', o: CT_LIST.filter(c => c >= 10).map(c => [String(c / 5), `${c}/5A`])},
+    {id: 'tap', l: '限時タップ', t: 'sel', d: '4', o: ['3', '3.5', '4', '4.5', '5', '6'].map(x => [x, x + 'A'])},
+    {id: 'lever', l: 'レバー(動作時間整定)', u: '1〜10', d: 2, step: 0.5},
+    {id: 'curve', l: '特性', t: 'sel', d: 'NI', o: Object.entries(OCR_CURVES).map(([k, c]) => [k, c.name])},
+    {id: 'inst', l: '瞬時タップ', t: 'sel', d: '40', o: [['0', 'なし(ロック)'], ['30', '30A'], ['40', '40A'], ['50', '50A'], ['60', '60A'], ['80', '80A']]},
+    {id: 'i', l: '故障電流(一次側)', u: 'A', d: 400}
+  ],
+  calc(v) {
+    const ct = +v.ct, tap = +v.tap, c = OCR_CURVES[v.curve];
+    const Ip = tap * ct, M = v.i / Ip, t = ocrT(c, M, v.lever);
+    const Iinst = +v.inst * ct, inst = +v.inst > 0 && v.i >= Iinst;
+    const Ms = [1.5, 2, 3, 5, 7, 10, 20];
+    const rows = Ms.map(m => [`${m * 100}%`, na(Ip * m, 0), nfix(ocrT(c, m, v.lever), 2)]);
+    return {
+      tiles: [tile('限時要素の整定(一次)', na(Ip, 0), 'A', `タップ${tap}A × CT比${ct}`), tile('故障電流の倍率', nfix(M, 2), '倍', `${v.i}A ÷ ${na(Ip, 0)}A`),
+        tile('動作時間', inst ? '瞬時' : M <= 1 ? '動作しない' : nfix(t, 2), inst || M <= 1 ? '' : '秒', inst ? `瞬時要素(${na(Iinst, 0)}A以上)で0.05秒以内` : M >= 20 ? '20倍以上は20倍の時間' : c.name, 'cu'),
+        tile('瞬時要素の整定(一次)', +v.inst ? na(Iinst, 0) : '–', +v.inst ? 'A' : '', +v.inst ? `${v.inst}A × ${ct}` : 'ロック')],
+      table: {h: `動作時間の特性(レバー${v.lever})`, head: ['整定の倍率', '一次電流 A', '動作時間 秒'], rows, hl: Ms.findIndex(m => m >= M) >= 0 ? Ms.findIndex(m => m >= M) : undefined},
+      fig: ocrSVG(c, v.lever, Ip, v.i, t, inst ? Iinst : null),
+      steps: [
+        {b: '倍率 M', s: `故障電流 ÷ (タップ × CT比) = ${v.i} ÷ (${tap} × ${ct})`, v: nfix(M, 2)},
+        {op: '→', b: '動作時間', s: `(${v.lever} ÷ 10) × ${c.k} ÷ (${nfix(Math.min(M, 20), 2)}^${c.a} − 1)`, v: M > 1 ? nfix(t, 2) + ' 秒' : '–', cls: 'total'}
+      ],
+      notes: ['JIS C 4602:2017 の標準特性(IEC 60255-151 と同じ式)。レバー10で反限時は300%で約6.3秒・700%で約3.5秒です。', '誘導形・旧型の静止形は特性式がJISに規定されていないため、メーカーの特性曲線で確認してください。JISの動作時間の許容差は300%で±17%、700%で±12%です。', '配電用変電所との保護協調は、管轄の電力会社に整定値を照会して確認してください。']
+    };
+  }
+});
+function ocrSVG(c, L, Ip, I, t, Iinst) {
+  const W = 420, H = 260, l = 50, r = 16, tp = 14, b = 40;
+  const x0 = Math.log10(Ip), x1 = Math.log10(Ip * 30), y0 = -1.3, y1 = 2; // 時間 0.05〜100秒
+  const X = a => l + (Math.log10(a) - x0) / (x1 - x0) * (W - l - r);
+  const Y = s => tp + (y1 - Math.log10(Math.max(s, 0.05))) / (y1 - y0) * (H - tp - b);
+  let d = '';
+  for (let m = 1.1; m <= 30; m *= 1.05) { const s = ocrT(c, m, L); if (s <= 100) d += (d ? 'L' : 'M') + X(Ip * m).toFixed(1) + ' ' + Y(s).toFixed(1); }
+  let grid = '';
+  for (const s of [0.1, 1, 10, 100]) grid += `<line x1="${l}" x2="${W - r}" y1="${Y(s)}" y2="${Y(s)}" stroke="var(--line)"/><text class="fig-m" x="${l - 6}" y="${Y(s) + 4}" text-anchor="end">${s}s</text>`;
+  for (const m of [1, 2, 5, 10, 20]) grid += `<line y1="${tp}" y2="${H - b}" x1="${X(Ip * m)}" x2="${X(Ip * m)}" stroke="var(--line)"/><text class="fig-m" x="${X(Ip * m)}" y="${H - b + 14}" text-anchor="middle">${na(Ip * m, 0)}A</text>`;
+  let inst = '';
+  if (Iinst && Iinst < Ip * 30) inst = `<line x1="${X(Iinst)}" x2="${X(Iinst)}" y1="${tp}" y2="${H - b}" stroke="var(--warn)" stroke-dasharray="4 3"/><text class="fig-m" x="${X(Iinst) + 4}" y="${tp + 10}">瞬時</text>`;
+  const pt = I > Ip && I < Ip * 30 && isFinite(t) ? `<circle cx="${X(I)}" cy="${Y(t)}" r="5" fill="var(--accent)"/><text class="fig-t" x="${X(I) + 8}" y="${Y(t) - 6}">${nfix(t, 2)}s</text>` : '';
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="OCRの動作特性">${grid}${inst}<path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>${pt}<text class="fig-m" x="${(l + W - r) / 2}" y="${H - 6}" text-anchor="middle">一次電流(対数目盛)</text></svg>`;
+}
+
+addTool({
+  id: 'earth', g: '短絡・地絡・保護', name: '接地抵抗の基準と判定(A・B・C・D種)',
+  desc: '接地工事の種類ごとの基準値(電技解釈 第17条)を求め、測定値を判定します。B種は1線地絡電流 Ig を17-2表の式で計算するか、電力会社から提示された値を入れます。',
+  fields: [
+    {id: 'kind', l: '接地工事の種類', t: 'sel', d: 'B', o: [['A', 'A種(高圧機器の外箱・避雷器)'], ['B', 'B種(変圧器の低圧側中性点)'], ['C', 'C種(300V超の低圧機器)'], ['D', 'D種(300V以下の低圧機器)']]},
+    {id: 'relax', l: '地絡時0.5秒以内に自動遮断', t: 'sel', d: 'no', o: [['no', 'なし'], ['yes', 'あり(漏電遮断器など)']], show: v => v.kind === 'C' || v.kind === 'D'},
+    {id: 'igm', l: '1線地絡電流 Ig', t: 'sel', d: 'calc', o: [['calc', '17-2表の式で計算'], ['input', '電力会社の値を入力']], show: v => v.kind === 'B'},
+    {id: 'ig', l: '1線地絡電流 Ig', u: 'A', d: 6, show: v => v.kind === 'B' && v.igm === 'input'},
+    {id: 'kv', l: '公称電圧', u: 'kV', d: 6.6, show: v => v.kind === 'B' && v.igm === 'calc'},
+    {id: 'lo', l: '架空電線の電線延長 L', u: 'km', d: 0, show: v => v.kind === 'B' && v.igm === 'calc'},
+    {id: 'lc', l: 'ケーブルの線路延長 L′', u: 'km', d: 5, show: v => v.kind === 'B' && v.igm === 'calc'},
+    {id: 'trip', l: '高圧側の自動遮断', t: 'sel', d: 'none', o: [['none', 'なし(または2秒超)'], ['2', '1秒超〜2秒以内'], ['1', '1秒以内']], show: v => v.kind === 'B'},
+    {id: 'meas', l: '測定値', u: 'Ω', d: 12}
+  ],
+  calc(v) {
+    let lim, how, steps = [];
+    if (v.kind === 'A') { lim = 10; how = 'A種: 10Ω以下'; }
+    else if (v.kind === 'C') { lim = v.relax === 'yes' ? 500 : 10; how = v.relax === 'yes' ? 'C種: 0.5秒以内の遮断装置ありで500Ω以下' : 'C種: 10Ω以下'; }
+    else if (v.kind === 'D') { lim = v.relax === 'yes' ? 500 : 100; how = v.relax === 'yes' ? 'D種: 0.5秒以内の遮断装置ありで500Ω以下' : 'D種: 100Ω以下'; }
+    else {
+      let Ig;
+      if (v.igm === 'calc') {
+        const Vp = v.kv / 1.1, t2 = Math.max(0, (Vp / 3 * v.lo - 100) / 150), t3 = Math.max(0, (Vp / 3 * v.lc - 1) / 2), raw = 1 + t2 + t3;
+        Ig = Math.max(2, Math.ceil(raw - 1e-9));
+        steps.push({b: "V′ = 公称電圧 ÷ 1.1", s: `${v.kv} ÷ 1.1`, v: nfix(Vp, 3) + ' kV'});
+        steps.push({op: '+', b: '架空電線の項', s: `((V′/3) × ${v.lo} − 100) ÷ 150(負なら0)`, v: nfix(t2, 3)});
+        steps.push({op: '+', b: 'ケーブルの項', s: `((V′/3) × ${v.lc} − 1) ÷ 2(負なら0)`, v: nfix(t3, 3)});
+        steps.push({op: '=', b: 'Ig = 1 + 上の2項', s: `${nfix(raw, 3)} → 小数点以下切り上げ(2A未満は2A)`, v: Ig + ' A'});
+      } else Ig = v.ig;
+      const k = v.trip === '1' ? 600 : v.trip === '2' ? 300 : 150;
+      lim = k / Ig; how = `B種: ${k} ÷ Ig(${Ig}A)`;
+      steps.push({op: '→', b: 'B種の上限', s: `${k} ÷ ${Ig}A`, v: nfix(lim, 1) + ' Ω', cls: 'total'});
+    }
+    const ok = v.meas <= lim + 1e-9;
+    if (!steps.length) steps.push({b: how, v: na(lim) + ' Ω', cls: 'total'});
+    return {
+      tiles: [tile('基準値', na(lim, 1), 'Ω以下', how, 'cu'), tile('判定', ok ? '適合' : '不適合', '', `測定値 ${v.meas}Ω`, ok ? 'ok' : 'ng'),
+        tile('余裕', nfix((1 - v.meas / lim) * 100, 0), '%', '基準値に対して')],
+      steps,
+      notes: ['B種の Ig 計算(17-2表)は中性点非接地式の高圧電路の式です。L は架空電線の「電線延長」(こう長 × 電線本数)、L′ はケーブルの「線路延長」で、単位の考え方が違います。同一母線につながる配電線全体の値なので、通常は電力会社から提示された Ig を使います。', '「高圧側の自動遮断」は、混触で低圧側の対地電圧が150Vを超えたときに高圧電路を自動で遮断する装置の遮断時間です。']
+    };
+  }
+});
+
+// ---------- 試験・点検 ----------
+addTool({
+  id: 'withstand', g: '試験・点検', name: '絶縁耐力試験(試験電圧と試験器容量)',
+  desc: '最大使用電圧と試験電圧(電技解釈 第1・15・16条)を求め、ケーブルの静電容量から充電電流と試験器に必要な容量を出します。',
+  fields: [
+    {id: 'vn', l: '公称電圧', u: 'V', d: 6600},
+    {id: 'obj', l: '試験の方法', t: 'sel', d: 'ac', o: [['ac', '交流(電路・機器)1.5倍'], ['dc', 'ケーブルを直流で(交流試験電圧の2倍)'], ['tr', '変圧器の巻線(500V未満は500V)']]},
+    {id: 'f', l: '周波数', t: 'sel', o: FREQ, d: '60', show: v => v.obj !== 'dc'},
+    {id: 'c1', l: 'ケーブル', t: 'sel', d: 'hvCVT|38', o: [['none', 'なし']].concat(cabOpts(['hvCVT', 'hvCV3'])), show: v => v.obj !== 'tr'},
+    {id: 'l1', l: 'ケーブルのこう長', u: 'm', d: 100, show: v => v.obj !== 'tr' && v.c1 !== 'none'},
+    {id: 'cx', l: '機器などの静電容量(対地)', u: 'μF', d: 0.01, step: 0.005, show: v => v.obj !== 'dc'}
+  ],
+  calc(v) {
+    const Em = v.vn <= 1000 ? v.vn * 1.15 : v.vn * 1.15 / 1.1;
+    let Vt = Em * 1.5;
+    if (v.obj === 'tr') Vt = Math.max(500, Vt);
+    const dc = v.obj === 'dc'; if (dc) Vt *= 2;
+    const c = v.obj !== 'tr' ? cabRX(v.c1, v.f || '60') : null;
+    const Cc = c ? 3 * c.c * v.l1 / 1000 : 0, C = Cc + (dc ? 0 : v.cx); // μF(3心一括・対地)
+    const w = 2 * Math.PI * (+v.f || 60), Ic = dc ? 0 : w * C * 1e-6 * Vt, kva = Vt * Ic / 1000;
+    return {
+      tiles: [tile('最大使用電圧', na(Em, 0), 'V', v.vn <= 1000 ? '公称電圧 × 1.15' : '公称電圧 × 1.15 ÷ 1.1'),
+        tile('試験電圧', na(Vt, 0), dc ? 'V(直流)' : 'V(交流)', dc ? '交流試験電圧 × 2 を10分間' : '最大使用電圧 × 1.5 を10分間', 'cu'),
+        tile('充電電流', dc ? '–' : na(Ic * 1000, 1), dc ? '' : 'mA', dc ? '直流試験では定常の充電電流は流れません' : `対地静電容量 ${nfix(C, 4)}μF`),
+        tile('試験器に必要な容量', dc ? '–' : na(kva, 2), dc ? '' : 'kVA', dc ? '' : '試験電圧 × 充電電流(補償リアクトルなし)')],
+      steps: [
+        {b: '最大使用電圧', s: v.vn <= 1000 ? `${v.vn} × 1.15` : `${v.vn} × 1.15 ÷ 1.1`, v: na(Em, 0) + ' V'},
+        {op: '×', b: '試験電圧', s: dc ? '1.5倍 × 直流2倍' : v.obj === 'tr' ? '1.5倍(500V未満は500V)' : '1.5倍', v: na(Vt, 0) + ' V'},
+        c && !dc ? {op: '→', b: 'ケーブルの静電容量', s: `${c.c}μF/km × 3心 × ${v.l1 / 1000}km`, v: nfix(Cc, 4) + ' μF'} : null,
+        !dc ? {op: '→', b: '充電電流', s: `2π × ${v.f}Hz × ${nfix(C, 4)}μF × ${na(Vt, 0)}V`, v: na(Ic * 1000, 1) + ' mA', cls: 'total'} : null
+      ].filter(Boolean),
+      notes: ['6,600V電路は最大使用電圧6,900V、交流試験電圧10,350V、ケーブルの直流試験電圧20,700V(いずれも10分間)。', 'ケーブルの静電容量はカタログの1心あたりの値で、3心を一括して大地(遮へい)との間に加える場合として3倍しています。機器(変圧器・VCT・避雷器など)の分は「機器などの静電容量」に足してください。', '試験器の容量が足りない場合は補償リアクトルで充電電流を打ち消します。']
+    };
+  }
+});
+
+const INS_CASES = [
+  ['lv150', '低圧 対地電圧150V以下(100V回路・単相3線など)', 'law', 0.1],
+  ['lv300', '低圧 300V以下でその他(三相200Vなど)', 'law', 0.2],
+  ['lv600', '低圧 300V超(400V回路など)', 'law', 0.4],
+  ['hvc5', '高圧ケーブル 絶縁体(5,000Vメガー)', 'hvc', [5000, 500]],
+  ['hvc10', '高圧ケーブル 絶縁体(10,000Vメガー)', 'hvc', [10000, 1000]],
+  ['sheath', '高圧ケーブル シース(500V・250Vメガー)', 'hvc', [1, 1]],
+  ['hvbus', '高圧 母線・一般(保安協会の目安)', 'guide', 6],
+  ['hvtr', '高圧 変圧器(保安協会の目安)', 'guide', 30],
+  ['hvsw', '高圧 開閉器・遮断器・コンデンサ(保安協会の目安)', 'guide', 100]
+];
+addTool({
+  id: 'insul', g: '試験・点検', name: '絶縁抵抗・漏えい電流の判定',
+  desc: '低圧は電技省令 第58条の基準値、測れないときは漏えい電流1mA(解釈 第14条)で判定します。高圧は法令の基準値がないため、高圧受電設備規程などの目安で判定します。',
+  fields: [
+    {id: 'cs', l: '測定する電路・部位', t: 'sel', d: 'lv300', o: INS_CASES.map(c => [c[0], c[1]])},
+    {id: 'm', l: '測定値', u: 'MΩ', d: 5},
+    {id: 'leak', l: '漏えい電流(測れないとき)', u: 'mA', d: 0, show: v => /^lv/.test(v.cs)}
+  ],
+  calc(v) {
+    const c = INS_CASES.find(x => x[0] === v.cs);
+    let lim, judge, cls, basis;
+    if (c[2] === 'law') { lim = c[3]; const ok = v.m >= lim; judge = ok ? '適合' : '不適合'; cls = ok ? 'ok' : 'ng'; basis = '電技省令 第58条'; }
+    else if (c[2] === 'hvc') { const [good, bad] = c[3]; lim = good; judge = v.m >= good ? '良' : v.m >= bad ? '要注意' : '不良'; cls = v.m >= good ? 'ok' : v.m >= bad ? '' : 'ng'; basis = '高圧受電設備規程 資料の判定目安'; }
+    else { lim = c[3]; judge = v.m >= lim ? '目安以上' : '目安未満'; cls = v.m >= lim ? 'ok' : 'ng'; basis = '電気保安協会の目安(法令の基準ではない)'; }
+    const tiles = [tile('基準値・目安', na(lim), 'MΩ以上', basis, 'cu'), tile('判定', judge, '', `測定値 ${v.m}MΩ`, cls)];
+    if (/^lv/.test(v.cs) && v.leak > 0) tiles.push(tile('漏えい電流', v.leak <= 1 ? '適合' : '不適合', '', `${v.leak}mA(1mA以下)`, v.leak <= 1 ? 'ok' : 'ng'));
+    return {
+      tiles,
+      notes: ['低圧は開閉器・過電流遮断器で区切れる電路ごとに、電線相互間と電路・大地間を測ります。', '高圧ケーブルの判定目安: 5,000Vメガーで5,000MΩ以上は良・500MΩ未満は不良、10,000Vメガーで10,000MΩ以上は良・1,000MΩ未満は不良、シースは1MΩ以上。規程ではこれらは参考程度で、直流漏れ電流測定などで総合判断するよう求めています。', '高圧機器の目安(母線6MΩ・変圧器30MΩ・開閉器等100MΩ)は電気保安協会の資料の値で、公的な基準ではありません。']
+    };
+  }
+});
+
+// ===== 起動 =====
 renderTypes();
 update();
 
