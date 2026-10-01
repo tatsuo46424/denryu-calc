@@ -197,13 +197,41 @@ body{margin:0}
 .tool-list button:hover{background:var(--sunk)}
 .tool-list button[aria-current="true"]{background:var(--accent-soft);color:var(--accent);font-weight:700}
 #tool-sel{display:none}
-.toolmenu > .lbl{display:none}
+.tm-head{display:flex;justify-content:space-between;align-items:baseline}
+#tool-q{width:100%;min-height:38px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:16px}
 @media (max-width:860px){
   .toolmenu{position:static;max-height:none}
   .tool-list{display:none}
   #tool-sel{display:block}
-  .toolmenu > .lbl{display:block}
 }
+.form-grid .field.wide{grid-column:1/-1}
+.form-grid .field.wide input{max-width:260px}
+/* 電卓 */
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:15;display:flex;align-items:center;gap:6px;
+  border:0;border-radius:999px;padding:12px 16px;background:var(--accent);color:var(--panel);font-weight:700;font-size:.9rem;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.22)}
+.fab svg{width:18px;height:18px}
+body.has-mbar .fab{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+.calc-sheet{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;width:340px;max-width:calc(100vw - 32px);
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.28);padding:12px;display:flex;flex-direction:column;gap:8px}
+@media (max-width:520px){.calc-sheet{left:0;right:0;bottom:0;width:auto;max-width:none;border-radius:16px 16px 0 0;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px))}}
+.calc-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.calc-top .t{font-weight:700;font-size:.9rem}
+.calc-top button{border:0;background:var(--sunk);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:.8rem;color:var(--ink)}
+.calc-disp{background:var(--sunk);border-radius:10px;padding:10px 12px;text-align:right;min-width:0}
+.calc-expr{font-family:var(--f-num);font-size:1.05rem;color:var(--mute);min-height:1.5em;word-break:break-all}
+.calc-res{font-family:var(--f-num);font-weight:700;font-size:2rem;line-height:1.2;color:var(--ink);overflow-x:auto;white-space:nowrap}
+.calc-hist{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;min-height:0}
+.calc-hist button{flex:none;border:1px solid var(--line);background:none;border-radius:999px;padding:3px 10px;font-family:var(--f-num);font-size:.75rem;color:var(--mute);cursor:pointer}
+.calc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.calc-sci{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.calc-keys button,.calc-sci button{border:0;border-radius:10px;min-height:48px;font-family:var(--f-num);font-size:1.2rem;font-weight:700;cursor:pointer;background:var(--sunk);color:var(--ink)}
+.calc-sci button{min-height:38px;font-size:.95rem;background:var(--bg);color:var(--accent)}
+.calc-keys button.op{background:var(--accent-soft);color:var(--accent)}
+.calc-keys button.eq{background:var(--accent);color:var(--panel)}
+.calc-keys button.fn{color:var(--mute)}
+.calc-keys button:active,.calc-sci button:active{transform:scale(.96)}
+.calc-tip{font-size:.72rem;color:var(--mute);margin:0}
+body.calc-open .kv .v,body.calc-open .big .v,body.calc-open #tool-table td,body.calc-open #r-all td{cursor:copy}
 .tool-head{margin-bottom:14px}
 .tool-title{font-size:1.2rem;font-weight:900;margin:2px 0 4px}
 .tool-head .small{margin:0;max-width:70ch}
@@ -251,8 +279,9 @@ body{margin:0}
 
 <main class="layout">
   <aside class="panel toolmenu" id="toolmenu" aria-label="計算ツール" hidden>
-    <label class="lbl" for="tool-sel">計算ツール</label>
-    <select id="tool-sel"></select>
+    <div class="tm-head"><span class="lbl">計算ツール</span><span class="small" id="tool-count"></span></div>
+    <input id="tool-q" type="search" placeholder="検索(例: kVA、短絡、接地)" aria-label="ツールを検索" autocomplete="off">
+    <select id="tool-sel" aria-label="計算ツールを選ぶ"></select>
     <nav id="tool-list" class="tool-list"></nav>
   </aside>
   <aside class="panel cond" aria-label="電線と布設の条件">
@@ -371,6 +400,23 @@ body{margin:0}
   <p>計算値は電技解釈・JCS 0168・メーカーカタログの表をもとにした目安です。実際の選定では、内線規程と採用メーカーのカタログで最終確認してください。</p>
   <p id="foot-src"></p>
 </footer>
+<button type="button" class="fab" id="calc-fab" aria-label="電卓を開く"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8 7h8M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 15.5h.01M12 15.5h.01M15.5 15.5h.01M8.5 19h.01M12 19h.01M15.5 19h.01"/></svg>電卓</button>
+<div class="calc-sheet" id="calc-sheet" role="dialog" aria-label="電卓" hidden>
+  <div class="calc-top"><span class="t">電卓</span><span><button type="button" id="calc-copy">答えをコピー</button> <button type="button" id="calc-close" aria-label="電卓を閉じる">閉じる ✕</button></span></div>
+  <div class="calc-disp"><div class="calc-expr" id="calc-expr"></div><div class="calc-res" id="calc-res">0</div></div>
+  <div class="calc-hist" id="calc-hist"></div>
+  <div class="calc-sci" id="calc-sci">
+    <button type="button" data-k="√3">√3</button><button type="button" data-k="√(">√</button><button type="button" data-k="²">x²</button><button type="button" data-k="%">%</button><button type="button" data-k="π">π</button>
+  </div>
+  <div class="calc-keys" id="calc-keys">
+    <button type="button" class="fn" data-k="AC">AC</button><button type="button" class="fn" data-k="(">(</button><button type="button" class="fn" data-k=")">)</button><button type="button" class="op" data-k="÷">÷</button>
+    <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button><button type="button" class="op" data-k="×">×</button>
+    <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button><button type="button" class="op" data-k="−">−</button>
+    <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button><button type="button" class="op" data-k="+">+</button>
+    <button type="button" data-k="0">0</button><button type="button" data-k=".">.</button><button type="button" class="fn" data-k="BS" aria-label="1文字消す">⌫</button><button type="button" class="eq" data-k="=">=</button>
+  </div>
+  <p class="calc-tip">電卓を開いたまま画面の計算結果(数値)をタップすると、その値が入ります。</p>
+</div>
 <button type="button" class="mbar" id="mbar" aria-label="結果へ移動"><span class="mb-t" id="mb-t"></span><span class="mb-v" id="mb-v"></span><span class="mb-go">結果 ↓</span></button>
 </div>
 
@@ -1145,7 +1191,7 @@ function refreshOnly() { // 入力中はフォーカスを奪わない
 function mbTarget() { return S.tab === 'calc' ? $('#view-calc .hero') : S.tab === 'select' ? $('#s-verdict') : null; }
 function renderMbar() {
   const tg = mbTarget(), bar = $('#mbar');
-  if (!tg) { bar.hidden = true; return; }
+  if (!tg || document.body.classList.contains('calc-open')) { bar.hidden = true; document.body.classList.remove('has-mbar'); return; }
   if (S.tab === 'calc') {
     $('#mb-t').textContent = $('#r-title').textContent;
     $('#mb-v').innerHTML = `${esc($('#r-val').textContent)}<small>A</small>`;
@@ -1156,6 +1202,7 @@ function renderMbar() {
   }
   const r = tg.getBoundingClientRect();
   bar.hidden = r.bottom > 0 && r.top < window.innerHeight - 80;
+  document.body.classList.toggle('has-mbar', !bar.hidden && matchMedia('(max-width:860px)').matches);
 }
 $('#mbar').onclick = () => { const tg = mbTarget(); if (tg) tg.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'}); };
 let mbRaf = 0;
@@ -1219,7 +1266,8 @@ const tile = (k, v, u, d, cls) => ({k, v, u, d, cls});
 const upStd = (x, list) => list.find(s => s >= x - 1e-9);
 
 const TOOLS = [];
-const GORDER = ['基本・電力', '変圧器', '短絡・地絡・保護', '試験・点検', '負荷・電線'];
+const GORDER = ['かんたん換算', '基本・電力', '変圧器', '短絡・地絡・保護', '試験・点検', '負荷・電線'];
+let toolQ = '';
 const addTool = t => TOOLS.push(t);
 
 // ---------- 基本・電力 ----------
@@ -1505,13 +1553,23 @@ function toolVals(t) {
   for (const f of t.fields) { const x = st[f.id]; v[f.id] = x !== undefined ? x : f.d; if (f.t !== 'sel') v[f.id] = +v[f.id]; }
   return v;
 }
-function curTool() { return TOOLS.find(t => t.id === S.tool) || TOOLS[0]; }
+function toolGroups(q) {
+  const groups = [], nq = q.trim().toLowerCase().replace(/\s+/g, '');
+  for (const x of TOOLS) {
+    if (nq && !(x.name + x.g + x.desc).toLowerCase().replace(/\s+/g, '').includes(nq)) continue;
+    let g = groups.find(g => g.n === x.g); if (!g) groups.push(g = {n: x.g, items: []}); g.items.push(x);
+  }
+  return groups.sort((a, b) => GORDER.indexOf(a.n) - GORDER.indexOf(b.n));
+}
+function curTool() { return TOOLS.find(t => t.id === S.tool) || toolGroups('')[0].items[0]; }
 function renderToolMenu() {
-  const t = curTool(), groups = [];
-  for (const x of TOOLS) { let g = groups.find(g => g.n === x.g); if (!g) groups.push(g = {n: x.g, items: []}); g.items.push(x); }
-  groups.sort((a, b) => GORDER.indexOf(a.n) - GORDER.indexOf(b.n));
-  $('#tool-list').innerHTML = groups.map(g => `<div class="tg">${esc(g.n)}</div>` + g.items.map(x => `<button type="button" data-id="${x.id}" aria-current="${x.id === t.id}">${esc(x.name)}</button>`).join('')).join('');
-  $('#tool-sel').innerHTML = groups.map(g => `<optgroup label="${esc(g.n)}">` + g.items.map(x => `<option value="${x.id}"${x.id === t.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('') + '</optgroup>').join('');
+  const t = curTool(), groups = toolGroups(toolQ);
+  $('#tool-list').innerHTML = groups.length ? groups.map(g => `<div class="tg">${esc(g.n)}</div>` + g.items.map(x => `<button type="button" data-id="${x.id}" aria-current="${x.id === t.id}">${esc(x.name)}</button>`).join('')).join('')
+    : '<p class="small" style="margin:6px 10px">見つかりません</p>';
+  const inSel = groups.some(g => g.items.includes(t));
+  $('#tool-sel').innerHTML = (inSel ? '' : `<option value="${t.id}" selected>${esc(t.name)}</option>`) +
+    groups.map(g => `<optgroup label="${esc(g.n)}">` + g.items.map(x => `<option value="${x.id}"${x.id === t.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('') + '</optgroup>').join('');
+  $('#tool-count').textContent = `${TOOLS.length}種類`;
 }
 function renderToolForm() {
   const t = curTool(), v = toolVals(t);
@@ -1521,7 +1579,8 @@ function renderToolForm() {
   $('#tool-form').innerHTML = t.fields.filter(f => !f.show || f.show(v)).map(f => {
     const id = `tf-${t.id}-${f.id}`;
     if (f.t === 'sel') return `<div class="field"><label class="lbl" for="${id}">${esc(f.l)}</label><select id="${id}" data-f="${f.id}">${f.o.map(([ov, ol]) => `<option value="${esc(ov)}"${String(ov) === String(v[f.id]) ? ' selected' : ''}>${esc(ol)}</option>`).join('')}</select></div>`;
-    return `<div class="field"><label class="lbl" for="${id}">${esc(f.l)}${f.u ? ` <span class="unit">${esc(f.u)}</span>` : ''}</label><input id="${id}" data-f="${f.id}" type="number" inputmode="decimal" step="${f.step || 'any'}" value="${v[f.id]}"></div>`;
+    const chips = f.chips ? `<div class="chips">${f.chips.map(c => `<button type="button" data-chip="${f.id}" data-cv="${c}" aria-pressed="${c === v[f.id]}">${c.toLocaleString()}</button>`).join('')}</div>` : '';
+    return `<div class="field${f.chips ? ' wide' : ''}"><label class="lbl" for="${id}">${esc(f.l)}${f.u ? ` <span class="unit">${esc(f.u)}</span>` : ''}</label><input id="${id}" data-f="${f.id}" type="number" inputmode="decimal" step="${f.step || 'any'}" value="${v[f.id]}">${chips}</div>`;
   }).join('');
 }
 function renderToolOut() {
@@ -1554,7 +1613,13 @@ $('#tool-form').addEventListener('input', e => {
   if (e.target.tagName === 'SELECT') { st[f] = e.target.value; save(); renderToolForm(); renderToolOut(); return; }
   const x = parseFloat(e.target.value); if (!isFinite(x)) return;
   st[f] = x; save(); renderToolOut();
+  document.querySelectorAll(`#tool-form [data-chip="${f}"]`).forEach(b => b.setAttribute('aria-pressed', +b.dataset.cv === x));
 });
+$('#tool-form').addEventListener('click', e => {
+  const b = e.target.closest('[data-chip]'); if (!b) return;
+  S.tv[curTool().id][b.dataset.chip] = +b.dataset.cv; save(); renderToolForm(); renderToolOut();
+});
+$('#tool-q').addEventListener('input', e => { toolQ = e.target.value; renderToolMenu(); });
 
 // ===== 電気計算ツール(ケーブル定数を使うもの) =====
 // ケーブル定数(Ω/km・μF/km)。出典: SFCC(昭和電線・古河)・フジクラ・ダイヤ・住電HST・北日本電線のカタログ(日本電線工業会 技資103号A)
@@ -1932,6 +1997,387 @@ addTool({
       notes: ['低圧は開閉器・過電流遮断器で区切れる電路ごとに、電線相互間と電路・大地間を測ります。', '高圧ケーブルの判定目安: 5,000Vメガーで5,000MΩ以上は良・500MΩ未満は不良、10,000Vメガーで10,000MΩ以上は良・1,000MΩ未満は不良、シースは1MΩ以上。規程ではこれらは参考程度で、直流漏れ電流測定などで総合判断するよう求めています。', '高圧機器の目安(母線6MΩ・変圧器30MΩ・開閉器等100MΩ)は電気保安協会の資料の値で、公的な基準ではありません。']
     };
   }
+});
+
+// ===== かんたん換算・追加ツール =====
+const V_CHIPS = [100, 200, 210, 400, 415, 440, 3300, 6600];
+const PF_CHIPS = [1, 0.95, 0.9, 0.85, 0.8];
+const V_TABLE = [100, 200, 210, 400, 415, 440, 3300, 6600];
+const kOf = ph => ph === '3' ? SQ3 : 1;
+const phName = ph => ph === '3' ? '三相' : '単相';
+const vf = (d) => ({id: 'v', l: '電圧(線間)', u: 'V', d: d || 200, chips: V_CHIPS});
+const phf = {id: 'ph', l: '相', t: 'sel', o: PH, d: '3'};
+const pff = {id: 'pf', l: '力率', u: '(0〜1)', d: 0.85, step: 0.01, chips: PF_CHIPS};
+// 電圧ごとの早見表
+function vTable(h, fn, unit, vSel) {
+  return {h, head: ['電圧', `単相 ${unit}`, `三相 ${unit}`], rows: V_TABLE.map(V => [`${V.toLocaleString()}V`, na(fn('1', V)), na(fn('3', V))]), hl: V_TABLE.indexOf(vSel) >= 0 ? V_TABLE.indexOf(vSel) : undefined};
+}
+
+addTool({
+  id: 'kva2a', g: 'かんたん換算', name: 'kVA → 電流(A)', quick: true,
+  desc: '皮相電力(kVA)から電流を求めます。変圧器の定格電流もこれで出せます。',
+  fields: [phf, vf(6600), {id: 's', l: '容量', u: 'kVA', d: 300, chips: [10, 50, 100, 200, 300, 500, 1000]}],
+  calc(v) {
+    const I = v.s * 1000 / (kOf(v.ph) * v.v);
+    return {
+      tiles: [tile('電流', na(I), 'A', `${phName(v.ph)} ${v.v.toLocaleString()}V ・ ${na(v.s)}kVA`, 'cu')],
+      steps: [{b: 'I = kVA × 1000 ÷ (' + (v.ph === '3' ? '√3 × ' : '') + 'V)', s: `${v.s} × 1000 ÷ (${v.ph === '3' ? '1.732 × ' : ''}${v.v})`, v: na(I) + ' A', cls: 'total'}],
+      table: vTable(`${na(v.s)}kVA の電圧別の電流`, (ph, V) => v.s * 1000 / (kOf(ph) * V), 'A', v.v)
+    };
+  }
+});
+addTool({
+  id: 'a2kva', g: 'かんたん換算', name: '電流(A) → kVA', quick: true,
+  desc: '電流と電圧から皮相電力(kVA)を求めます。',
+  fields: [phf, vf(200), {id: 'i', l: '電流', u: 'A', d: 100}],
+  calc(v) {
+    const S = kOf(v.ph) * v.v * v.i / 1000;
+    return {
+      tiles: [tile('皮相電力', na(S), 'kVA', `${phName(v.ph)} ${v.v.toLocaleString()}V ・ ${na(v.i)}A`, 'cu')],
+      steps: [{b: 'kVA = ' + (v.ph === '3' ? '√3 × ' : '') + 'V × I ÷ 1000', s: `${v.ph === '3' ? '1.732 × ' : ''}${v.v} × ${v.i} ÷ 1000`, v: na(S) + ' kVA', cls: 'total'}],
+      table: vTable(`${na(v.i)}A の電圧別の容量`, (ph, V) => kOf(ph) * V * v.i / 1000, 'kVA', v.v)
+    };
+  }
+});
+addTool({
+  id: 'kw2a', g: 'かんたん換算', name: 'kW → 電流(A)', quick: true,
+  desc: '有効電力(kW)と力率から電流を求めます。ヒーターなど抵抗負荷は力率1です。',
+  fields: [phf, vf(200), {id: 'p', l: '電力', u: 'kW', d: 10}, pff],
+  calc(v) {
+    const S = v.p / v.pf, I = S * 1000 / (kOf(v.ph) * v.v);
+    return {
+      tiles: [tile('電流', na(I), 'A', `${phName(v.ph)} ${v.v.toLocaleString()}V ・ ${na(v.p)}kW ・ 力率${v.pf}`, 'cu'), tile('皮相電力', na(S), 'kVA', 'kW ÷ 力率')],
+      steps: [{b: 'I = kW × 1000 ÷ (' + (v.ph === '3' ? '√3 × ' : '') + 'V × 力率)', s: `${v.p} × 1000 ÷ (${v.ph === '3' ? '1.732 × ' : ''}${v.v} × ${v.pf})`, v: na(I) + ' A', cls: 'total'}],
+      table: vTable(`${na(v.p)}kW・力率${v.pf} の電圧別の電流`, (ph, V) => v.p * 1000 / (kOf(ph) * V * v.pf), 'A', v.v)
+    };
+  }
+});
+addTool({
+  id: 'a2kw', g: 'かんたん換算', name: '電流(A) → kW', quick: true,
+  desc: '電流・電圧・力率から有効電力(kW)を求めます。',
+  fields: [phf, vf(200), {id: 'i', l: '電流', u: 'A', d: 30}, pff],
+  calc(v) {
+    const S = kOf(v.ph) * v.v * v.i / 1000, P = S * v.pf;
+    return {
+      tiles: [tile('有効電力', na(P), 'kW', `${phName(v.ph)} ${v.v.toLocaleString()}V ・ ${na(v.i)}A ・ 力率${v.pf}`, 'cu'), tile('皮相電力', na(S), 'kVA', '')],
+      steps: [{b: 'kW = ' + (v.ph === '3' ? '√3 × ' : '') + 'V × I × 力率 ÷ 1000', s: `${v.ph === '3' ? '1.732 × ' : ''}${v.v} × ${v.i} × ${v.pf} ÷ 1000`, v: na(P) + ' kW', cls: 'total'}],
+      table: vTable(`${na(v.i)}A・力率${v.pf} の電圧別の電力`, (ph, V) => kOf(ph) * V * v.i * v.pf / 1000, 'kW', v.v)
+    };
+  }
+});
+addTool({
+  id: 'kwkva', g: 'かんたん換算', name: 'kW ⇔ kVA ⇔ kVAR', quick: true,
+  desc: '力率を使って有効電力・皮相電力・無効電力を相互に換算します。',
+  fields: [{id: 'mode', l: '換算', t: 'sel', d: 'p', o: [['p', 'kW から'], ['s', 'kVA から']]},
+    {id: 'x', l: '値', u: '', d: 100}, pff],
+  calc(v) {
+    const S = v.mode === 'p' ? v.x / v.pf : v.x, P = S * v.pf, Q = S * Math.sqrt(1 - v.pf ** 2);
+    return {
+      tiles: [tile('有効電力', na(P), 'kW', '', v.mode === 's' ? 'cu' : ''), tile('皮相電力', na(S), 'kVA', '', v.mode === 'p' ? 'cu' : ''), tile('無効電力', na(Q), 'kVAR', '')],
+      steps: [{b: v.mode === 'p' ? 'kVA = kW ÷ 力率' : 'kW = kVA × 力率', v: v.mode === 'p' ? na(S) + ' kVA' : na(P) + ' kW', cls: 'total'}, {b: 'kVAR = kVA × √(1 − 力率²)', v: na(Q) + ' kVAR'}]
+    };
+  }
+});
+addTool({
+  id: 'hp', g: 'かんたん換算', name: '馬力 ⇔ kW', quick: true,
+  desc: '電動機の馬力とkWを換算します。日本の銘板の「馬力」は仏馬力(PS)が一般的です。',
+  fields: [{id: 'mode', l: '換算', t: 'sel', d: 'h', o: [['h', '馬力 → kW'], ['k', 'kW → 馬力']]}, {id: 'x', l: '値', u: '', d: 10, chips: [1, 2, 3, 5, 7.5, 10, 15, 20]}],
+  calc(v) {
+    const ps = 0.7355, hp = 0.7457;
+    return v.mode === 'h'
+      ? {tiles: [tile('kW(仏馬力 PS)', na(v.x * ps, 3), 'kW', `${v.x}PS × 0.7355`, 'cu'), tile('kW(英馬力 HP)', na(v.x * hp, 3), 'kW', `${v.x}HP × 0.7457`)]}
+      : {tiles: [tile('仏馬力(PS)', na(v.x / ps, 2), 'PS', `${v.x}kW ÷ 0.7355`, 'cu'), tile('英馬力(HP)', na(v.x / hp, 2), 'HP', `${v.x}kW ÷ 0.7457`)]};
+  }
+});
+addTool({
+  id: 'vph', g: 'かんたん換算', name: '線間電圧 ⇔ 相電圧(√3)', quick: true,
+  desc: '三相の線間電圧と相電圧(対地電圧・Y結線の1相分)を換算します。',
+  fields: [{id: 'mode', l: '換算', t: 'sel', d: 'l', o: [['l', '線間電圧 → 相電圧'], ['p', '相電圧 → 線間電圧']]}, {id: 'x', l: '電圧', u: 'V', d: 6600, chips: [200, 400, 415, 3300, 6600, 6900]}],
+  calc(v) {
+    const r = v.mode === 'l' ? v.x / SQ3 : v.x * SQ3;
+    return {tiles: [tile(v.mode === 'l' ? '相電圧' : '線間電圧', na(r, 1), 'V', v.mode === 'l' ? `${v.x} ÷ √3` : `${v.x} × √3`, 'cu')],
+      notes: ['6.6kV系統の対地電圧(相電圧)は 6,600 ÷ √3 ≒ 3,811V です。']};
+  }
+});
+addTool({
+  id: 'bill', g: 'かんたん換算', name: '電気代(kW × 時間)', quick: true,
+  desc: '消費電力と使用時間から電力量と電気代を求めます。',
+  fields: [{id: 'p', l: '消費電力', u: 'kW', d: 1.5}, {id: 'h', l: '1日の使用時間', u: 'h', d: 8, chips: [1, 4, 8, 12, 24]}, {id: 'days', l: '日数', u: '日', d: 30, chips: [1, 22, 30, 365]}, {id: 'yen', l: '電力量単価', u: '円/kWh', d: 31}],
+  calc(v) {
+    const kwh = v.p * v.h * v.days;
+    return {tiles: [tile('電気代', na(kwh * v.yen, 0), '円', `${v.days}日分`, 'cu'), tile('電力量', na(kwh, 1), 'kWh', `${v.p}kW × ${v.h}h × ${v.days}日`), tile('1日あたり', na(v.p * v.h * v.yen, 0), '円/日')],
+      notes: ['電力量単価は契約により違います(燃料費調整額・再エネ賦課金を含めた単価を入れてください)。基本料金は含みません。']};
+  }
+});
+addTool({
+  id: 'area', g: 'かんたん換算', name: '直径 ⇔ 断面積(mm²)', quick: true,
+  desc: '単線の直径(mm)と断面積(mm²)を換算します。',
+  fields: [{id: 'mode', l: '換算', t: 'sel', d: 'd', o: [['d', '直径 → 断面積'], ['a', '断面積 → 直径']]}, {id: 'x', l: '値', u: 'mm または mm²', d: 1.6, chips: [1.6, 2.0, 2.6, 3.2]}],
+  calc(v) {
+    return v.mode === 'd'
+      ? {tiles: [tile('断面積', na(Math.PI * v.x * v.x / 4, 3), 'mm²', `π × ${v.x}² ÷ 4`, 'cu')], notes: ['単線1.6mm=2.01mm²、2.0mm=3.14mm²、2.6mm=5.31mm²、3.2mm=8.04mm²。']}
+      : {tiles: [tile('直径', na(Math.sqrt(v.x * 4 / Math.PI), 3), 'mm', `√(4 × ${v.x} ÷ π)`, 'cu')], notes: ['より線は素線の隙間があるため、外径はこの値より大きくなります。']};
+  }
+});
+addTool({
+  id: 'sync', g: 'かんたん換算', name: '電動機の回転数・すべり', quick: true,
+  desc: '周波数と極数から同期速度を求め、実際の回転数からすべりを出します。',
+  fields: [{id: 'f', l: '周波数', t: 'sel', o: FREQ, d: '60'}, {id: 'p', l: '極数', u: '極', d: 4, chips: [2, 4, 6, 8]}, {id: 'n', l: '実際の回転数(銘板)', u: 'min⁻¹', d: 1750}],
+  calc(v) {
+    const ns = 120 * (+v.f) / v.p, s = (ns - v.n) / ns * 100;
+    return {tiles: [tile('同期速度', na(ns, 0), 'min⁻¹', `120 × ${v.f}Hz ÷ ${v.p}極`, 'cu'), tile('すべり', v.n ? nfix(s, 2) : '–', '%', '(同期速度 − 回転数) ÷ 同期速度')]};
+  }
+});
+const UNITS = {
+  pw: {n: '電力', u: {W: 1, kW: 1e3, MW: 1e6, 'PS(仏馬力)': 735.5, 'HP(英馬力)': 745.7, 'kcal/h': 1.163}},
+  en: {n: '電力量・熱量', u: {Wh: 1, kWh: 1e3, MWh: 1e6, kJ: 1 / 3.6, MJ: 1e3 / 3.6, kcal: 1.163}},
+  cu: {n: '電流', u: {mA: 1e-3, A: 1, kA: 1e3}},
+  vo: {n: '電圧', u: {mV: 1e-3, V: 1, kV: 1e3}},
+  re: {n: '抵抗', u: {'mΩ': 1e-3, 'Ω': 1, 'kΩ': 1e3, 'MΩ': 1e6}},
+  ca: {n: '静電容量', u: {pF: 1e-12, nF: 1e-9, 'μF': 1e-6, F: 1}}
+};
+addTool({
+  id: 'units', g: 'かんたん換算', name: '単位の換算', quick: true,
+  desc: '電力・電力量・電流・電圧・抵抗・静電容量の単位を換算します。',
+  fields: [{id: 'cat', l: '種類', t: 'sel', d: 'pw', o: Object.entries(UNITS).map(([k, c]) => [k, c.n])}].concat(
+    Object.entries(UNITS).map(([k, c]) => ({id: 'from_' + k, l: '元の単位', t: 'sel', d: Object.keys(c.u)[1], o: Object.keys(c.u).map(u => [u, u]), show: v => v.cat === k})),
+    [{id: 'x', l: '値', u: '', d: 1}]),
+  calc(v) {
+    const c = UNITS[v.cat], from = v['from_' + v.cat], base = v.x * c.u[from];
+    return {tiles: Object.entries(c.u).filter(([u]) => u !== from).map(([u, f]) => tile(u, na(base / f, 6), '', '', ''))};
+  }
+});
+// 電流から電線サイズ(許容電流タブのデータを使う)
+const QWIRE = [
+  ['IV 管内3本以下(内線規程 30℃)', 'IV', 'NW:IV', 1, 'conduit', 30],
+  ['HIV 管内3本以下(内線規程 30℃)', 'HIV', 'NW:HIV', 1, 'conduit', 30],
+  ['VVF 2心 気中(JCS 40℃)', 'VVF', 'T:VVF_J', 2, 'air', 40],
+  ['VVF 3心 気中(JCS 40℃)', 'VVF', 'T:VVF_J', 3, 'air', 40],
+  ['VV(VVR)3心 気中(JCS 40℃)', 'VVR', 'T:VV_J', 3, 'air', 40],
+  ['CV 3心 気中(JCS 40℃)', 'CV', 'T:CV', 3, 'air', 40],
+  ['CV 3心 電線管(JCS 40℃)', 'CV', 'T:CV', 3, 'conduit', 40],
+  ['CV 3心 管路2孔1条(JCS 25℃)', 'CV', 'T:CV', 3, 'duct', 25],
+  ['CVT 気中(JCS 40℃)', 'CVT', 'T:CVT', 3, 'air', 40],
+  ['CVT 電線管(JCS 40℃)', 'CVT', 'T:CVT', 3, 'conduit', 40],
+  ['CVT 管路2孔1条(JCS 25℃)', 'CVT', 'T:CVT', 3, 'duct', 25],
+  ['6.6kV CVT 気中(JCS 40℃)', 'CVT66', 'T:CVT66', 3, 'air', 40]
+];
+function calcWith(id, m, o) {
+  const t = TMAP[id], sv = S.method[id]; S.method[id] = m;
+  try { return calc(t, o); } finally { if (sv === undefined) delete S.method[id]; else S.method[id] = sv; }
+}
+function sizesWith(id, m, c) {
+  const t = TMAP[id];
+  if (mk(m) === 'NW') return t.sizes.filter(s => NWT[mref(m)].rows[s]);
+  return JT[mref(m)].cores[c].sizes.filter(s => !t.only || t.only.includes(s));
+}
+addTool({
+  id: 'qwire', g: 'かんたん換算', name: '電流 → 電線サイズ(早わかり)', quick: true,
+  desc: '電流を入れると、よく使う電線・布設条件ごとに必要な最小サイズを一覧で出します。細かい条件は「許容電流」タブで確認してください。',
+  fields: [{id: 'i', l: '負荷電流', u: 'A', d: 50, chips: [15, 20, 30, 50, 75, 100, 150, 200, 300]}, {id: 'mot', l: '負荷の種類', t: 'sel', d: 'gen', o: [['gen', '一般'], ['motor', '電動機(×1.25 / 50A超は×1.1)']]}],
+  calc(v) {
+    const need = v.mot === 'motor' ? (v.i <= 50 ? v.i * 1.25 : v.i * 1.1) : v.i;
+    const rows = QWIRE.map(([name, id, m, c, lay, temp]) => {
+      // 断面積の小さい順(同じならより線を優先)に、必要な許容電流を満たす最初のサイズ
+      const pick = sizesWith(id, m, c).slice().sort((a, b) => sizeArea(a) - sizeArea(b) || (a[0] === 'a' ? -1 : 1)).map(s => ({s, r: calcWith(id, m, {size: s, lay, n: 3, temp, multi: 1, cores: c})})).find(x => x.r.ok && x.r.val >= need - 1e-9);
+      return [name, pick ? sizeLabel(pick.s) : '表の範囲を超える', pick ? fmtA(pick.r) + ' A' : '–'];
+    });
+    return {
+      tiles: [tile('必要な許容電流', na(need, 1), 'A', v.mot === 'motor' ? '電技解釈 第148条' : '負荷電流そのもの', 'cu')],
+      table: {h: `${na(need, 1)}A 以上の許容電流がある最小サイズ`, head: ['電線・布設条件', '最小サイズ', '許容電流'], rows},
+      notes: ['1条布設・周囲温度は表の基準温度で比べています。こう長が長いときは電圧降下も確かめてください(「負荷から選定」タブ)。']
+    };
+  }
+});
+
+// ---------- 基本・電力 追加 ----------
+addTool({
+  id: 'rcomb', g: '基本・電力', name: '合成抵抗(直列・並列)',
+  desc: '最大4つの抵抗の合成抵抗を求めます。使わない欄は0のままにしてください。',
+  fields: [{id: 'r1', l: 'R1', u: 'Ω', d: 10}, {id: 'r2', l: 'R2', u: 'Ω', d: 20}, {id: 'r3', l: 'R3', u: 'Ω', d: 0}, {id: 'r4', l: 'R4', u: 'Ω', d: 0}],
+  calc(v) {
+    const rs = [v.r1, v.r2, v.r3, v.r4].filter(x => x > 0);
+    if (!rs.length) return {warn: '抵抗値を1つ以上入れてください。'};
+    const ser = rs.reduce((a, b) => a + b, 0), par = 1 / rs.reduce((a, b) => a + 1 / b, 0);
+    return {tiles: [tile('直列', na(ser), 'Ω', rs.join(' + '), 'cu'), tile('並列', na(par), 'Ω', '1 ÷ (1/R1 + 1/R2 + …)', 'cu')],
+      notes: ['2つの並列は R1 × R2 ÷ (R1 + R2) でも求まります。接地極を並列にしたときの合成値の目安にもなります(実際は相互干渉で大きくなります)。']};
+  }
+});
+addTool({
+  id: 'rcond', g: '基本・電力', name: '電線の導体抵抗(温度補正つき)',
+  desc: '銅導体の断面積・長さ・温度から抵抗と、往復の電圧降下を求めます。',
+  fields: [{id: 'a', l: '断面積', u: 'mm²', d: 5.5, chips: [2, 3.5, 5.5, 8, 14, 22, 38, 60, 100]}, {id: 'len', l: '長さ(片道)', u: 'm', d: 50}, {id: 'temp', l: '導体温度', u: '℃', d: 20, chips: [20, 30, 60, 75, 90]}, {id: 'i', l: '電流(降下計算用)', u: 'A', d: 20}],
+  calc(v) {
+    const r20 = 1 / 58 * v.len / v.a, R = r20 * (1 + 0.00393 * (v.temp - 20));
+    return {tiles: [tile('片道の抵抗', na(R, 4), 'Ω', `${v.temp}℃`, 'cu'), tile('往復の抵抗', na(2 * R, 4), 'Ω', '単相2線式の場合'), tile('往復の電圧降下', na(2 * R * v.i, 2), 'V', `${v.i}A × 往復抵抗`)],
+      steps: [{b: '20℃の抵抗', s: `(1/58) × ${v.len}m ÷ ${v.a}mm²`, v: na(r20, 4) + ' Ω'}, {op: '×', b: '温度補正', s: `1 + 0.00393 × (${v.temp} − 20)`, v: nfix(1 + 0.00393 * (v.temp - 20), 4)}, {op: '=', b: '抵抗', v: na(R, 4) + ' Ω', cls: 'total'}],
+      notes: ['軟銅の抵抗率 1/58 Ω·mm²/m(20℃)、温度係数 0.00393/℃ で計算しています。JISの導体抵抗(最大値)より少し小さめになります。']};
+  }
+});
+
+// ---------- 変圧器 追加 ----------
+addTool({
+  id: 'trtable', g: '変圧器', name: '変圧器容量と定格電流の早見表',
+  desc: '標準容量の変圧器について、1次・2次の定格電流を一覧にします。',
+  fields: [{id: 'ph', l: '相', t: 'sel', o: PH, d: '3'}, {id: 'v1', l: '1次電圧', u: 'V', d: 6600, chips: [3300, 6600]}, {id: 'v2', l: '2次電圧', u: 'V', d: 210, chips: [105, 210, 420, 440]}],
+  calc(v) {
+    const k = kOf(v.ph), list = v.ph === '3' ? TR3 : TR1;
+    return {tiles: [tile('計算式', v.ph === '3' ? 'kVA×1000÷(√3×V)' : 'kVA×1000÷V', '', `${phName(v.ph)}`)],
+      table: {h: `${phName(v.ph)}変圧器 ${v.v1}V / ${v.v2}V`, head: ['容量 kVA', `1次 ${v.v1}V A`, `2次 ${v.v2}V A`], rows: list.map(s => [String(s), na(s * 1000 / (k * v.v1)), na(s * 1000 / (k * v.v2))])}};
+  }
+});
+addTool({
+  id: 'vconn', g: '変圧器', name: 'V結線の出力と利用率',
+  desc: '単相変圧器2台のV結線(または1台故障時のΔ→V)で取り出せる三相出力を求めます。',
+  fields: [{id: 's', l: '単相変圧器1台の容量', u: 'kVA', d: 50, chips: [10, 20, 30, 50, 75, 100]}],
+  calc(v) {
+    return {tiles: [tile('V結線の三相出力', na(SQ3 * v.s), 'kVA', `√3 × ${v.s}kVA`, 'cu'), tile('利用率', '86.6', '%', '√3 ÷ 2'), tile('Δ結線(3台)比', '57.7', '%', '√3 ÷ 3(Δ→Vにしたとき)'), tile('Δ結線3台の出力', na(3 * v.s), 'kVA', '')]};
+  }
+});
+
+// ---------- 負荷・電線 追加 ----------
+addTool({
+  id: 'unbal', g: '負荷・電線', name: '設備不平衡率',
+  desc: '単相3線式・三相3線式に単相負荷をつないだときの設備不平衡率を求めます。',
+  fields: [{id: 'sys', l: '電気方式', t: 'sel', d: '13', o: [['13', '単相3線式'], ['33', '三相3線式']]},
+    {id: 'a', l: '負荷 A', u: 'kVA', d: 5, show: v => true}, {id: 'b', l: '負荷 B', u: 'kVA', d: 3}, {id: 'c', l: '負荷 C', u: 'kVA', d: 2},
+    {id: 'p3', l: '三相負荷', u: 'kVA', d: 0, show: v => v.sys === '33'}],
+  calc(v) {
+    if (v.sys === '13') {
+      const tot = v.a + v.b + v.c, r = Math.abs(v.a - v.b) / (tot / 2) * 100;
+      return {tiles: [tile('設備不平衡率', nfix(r, 1), '%', r <= 40 ? '40%以下' : '40%を超えます', r <= 40 ? 'ok' : 'ng')],
+        steps: [{b: '|A − B| ÷ (総容量 ÷ 2)', s: `|${v.a} − ${v.b}| ÷ (${na(tot)} ÷ 2)`, v: nfix(r, 1) + ' %', cls: 'total'}],
+        notes: ['A・B = 中性線と各外線の間の負荷、C = 外線間(200V)の負荷。内線規程では原則40%以下です。']};
+    }
+    const xs = [v.a, v.b, v.c], tot = v.a + v.b + v.c + v.p3, r = (Math.max(...xs) - Math.min(...xs)) / (tot / 3) * 100;
+    return {tiles: [tile('設備不平衡率', nfix(r, 1), '%', r <= 30 ? '30%以下' : '30%を超えます', r <= 30 ? 'ok' : 'ng')],
+      steps: [{b: '(最大 − 最小) ÷ (総容量 ÷ 3)', s: `(${Math.max(...xs)} − ${Math.min(...xs)}) ÷ (${na(tot)} ÷ 3)`, v: nfix(r, 1) + ' %', cls: 'total'}],
+      notes: ['A・B・C = 各線間につないだ単相負荷、三相負荷は総容量に含めます。内線規程では原則30%以下です。']};
+  }
+});
+
+// ===== 電卓 =====
+const CALC = {expr: '', just: false};
+const OPS = '+−×÷';
+// 字句解析: 数値・演算子・括弧・√・²・%・π
+function calcTokens(s) {
+  const out = []; let i = 0;
+  while (i < s.length) {
+    const m = /^(\d+\.?\d*|\.\d+)(e[+\-]?\d+)?/.exec(s.slice(i));
+    if (m) { out.push({t: 'n', v: parseFloat(m[0])}); i += m[0].length; continue; }
+    const c = s[i++];
+    if ('+−×÷()√²%π'.includes(c)) out.push({t: c}); else if (c !== ' ' && c !== ',') throw new Error('bad');
+  }
+  return out;
+}
+// 構文解析(再帰下降)。数値・π・(・√ が続いたら掛け算を補う
+function calcEval(s) {
+  const open = (s.match(/\(/g) || []).length - (s.match(/\)/g) || []).length;
+  if (open > 0) s += ')'.repeat(open);
+  const tk = calcTokens(s); let p = 0;
+  const peek = () => tk[p], eat = t => (tk[p] && tk[p].t === t) ? tk[p++] : null;
+  const startsPrimary = x => x && (x.t === 'n' || x.t === 'π' || x.t === '(' || x.t === '√');
+  function expr() { let v = term(); for (;;) { if (eat('+')) v += term(); else if (eat('−')) v -= term(); else return v; } }
+  function term() {
+    let v = unary();
+    for (;;) {
+      if (eat('×')) v *= unary(); else if (eat('÷')) v /= unary();
+      else if (startsPrimary(peek())) v *= postfix(); else return v;
+    }
+  }
+  function unary() { if (eat('−')) return -unary(); if (eat('+')) return unary(); return postfix(); }
+  function postfix() { let v = primary(); for (;;) { if (eat('²')) v = v * v; else if (eat('%')) v = v / 100; else return v; } }
+  function primary() {
+    const x = peek(); if (!x) throw new Error('end');
+    if (x.t === 'n') { p++; return x.v; }
+    if (x.t === 'π') { p++; return Math.PI; }
+    if (eat('(')) { const v = expr(); if (!eat(')')) throw new Error(')'); return v; }
+    if (eat('√')) return Math.sqrt(postfix());
+    throw new Error('unexpected');
+  }
+  const v = expr();
+  if (p < tk.length) throw new Error('rest');
+  return v;
+}
+function calcFmt(x) {
+  if (!isFinite(x)) return 'エラー';
+  const y = Number(x.toPrecision(12)), a = Math.abs(y);
+  if (a !== 0 && (a >= 1e15 || a < 1e-7)) return y.toExponential(6);
+  return y.toLocaleString('ja-JP', {maximumFractionDigits: 10});
+}
+const calcPlain = x => String(Number(x.toPrecision(12)));
+function calcShow() {
+  $('#calc-expr').textContent = CALC.expr || ' ';
+  let r = '';
+  try { r = CALC.expr ? calcFmt(calcEval(CALC.expr)) : '0'; } catch (e) { r = $('#calc-res').dataset.last || '0'; }
+  $('#calc-res').textContent = r;
+  $('#calc-res').dataset.last = r;
+  const h = S.calcHist || [];
+  $('#calc-hist').innerHTML = h.map((x, i) => `<button type="button" data-h="${i}" title="${esc(x.e)}">${esc(x.e.length > 14 ? '…' + x.e.slice(-13) : x.e)} = ${esc(calcFmt(x.r))}</button>`).join('');
+}
+function calcKey(k) {
+  let e = CALC.expr;
+  const last = e.slice(-1);
+  if (k === 'AC') { CALC.expr = ''; CALC.just = false; return calcShow(); }
+  if (k === 'BS') { CALC.expr = CALC.just ? '' : e.slice(0, -1); CALC.just = false; return calcShow(); }
+  if (k === '=') {
+    if (!e) return;
+    let v; try { v = calcEval(e); } catch (er) { $('#calc-res').textContent = '式を確認してください'; return; }
+    if (!isFinite(v)) { $('#calc-res').textContent = 'エラー'; return; }
+    S.calcHist = [{e, r: v}].concat((S.calcHist || []).filter(x => x.e !== e)).slice(0, 12); save();
+    CALC.expr = calcPlain(v); CALC.just = true; return calcShow();
+  }
+  const isOp = OPS.includes(k) || k === '²' || k === '%';
+  if (CALC.just && !isOp) e = '';
+  CALC.just = false;
+  if (OPS.includes(k)) {
+    if (!e && k !== '−') { e = '0'; }
+    if (OPS.includes(last) && !(k === '−' && (last === '×' || last === '÷'))) e = e.slice(0, -1);
+  }
+  if (k === '.') { const m = /[\d.]*$/.exec(e)[0]; if (m.includes('.')) return; if (!m) k = '0.'; }
+  CALC.expr = e + k;
+  calcShow();
+}
+function calcInsertNumber(n) {
+  let e = CALC.expr;
+  if (CALC.just || !e) e = '';
+  else if (/[\d.)π²%]$/.test(e)) e += '×';
+  CALC.expr = e + n; CALC.just = false; calcShow();
+}
+function calcOpen(open) {
+  $('#calc-sheet').hidden = !open;
+  $('#calc-fab').hidden = open;
+  document.body.classList.toggle('calc-open', open);
+  renderMbar();
+  if (open) calcShow();
+}
+$('#calc-fab').onclick = () => calcOpen(true);
+$('#calc-close').onclick = () => calcOpen(false);
+$('#calc-keys').onclick = $('#calc-sci').onclick = e => { const b = e.target.closest('button[data-k]'); if (b) calcKey(b.dataset.k); };
+$('#calc-hist').onclick = e => { const b = e.target.closest('button[data-h]'); if (b) { const x = S.calcHist[+b.dataset.h]; if (x) calcInsertNumber(calcPlain(x.r)); } };
+$('#calc-copy').onclick = () => {
+  const txt = $('#calc-res').textContent.replace(/,/g, '');
+  const sel = () => { const r = document.createRange(); r.selectNodeContents($('#calc-res')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+  try { navigator.clipboard.writeText(txt).then(() => { $('#calc-copy').textContent = 'コピーしました'; setTimeout(() => { $('#calc-copy').textContent = '答えをコピー'; }, 1500); }, sel); } catch (er) { sel(); }
+};
+// 電卓を開いているとき、画面の計算結果の数値をタップすると入力する
+document.addEventListener('click', e => {
+  if ($('#calc-sheet').hidden) return;
+  const el = e.target.closest('.kv .v, .big .v, #tool-table td, #r-all td, #t-table td, #s-table td, #r-steps .val, #tool-steps .val');
+  if (!el) return;
+  const m = /-?\d[\d,]*(\.\d+)?/.exec(el.textContent);
+  if (!m) return;
+  e.preventDefault(); e.stopPropagation();
+  calcInsertNumber(m[0].replace(/,/g, ''));
+}, true);
+document.addEventListener('keydown', e => {
+  if ($('#calc-sheet').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  const tg = e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return;
+  const map = {'*': '×', 'x': '×', '/': '÷', '-': '−', '+': '+', '(': '(', ')': ')', '%': '%', '.': '.', 'Enter': '=', '=': '=', 'Backspace': 'BS', 'Delete': 'AC', 'Escape': 'ESC'};
+  let k = /^\d$/.test(e.key) ? e.key : map[e.key];
+  if (!k) return;
+  e.preventDefault();
+  if (k === 'ESC') calcOpen(false); else calcKey(k);
 });
 
 // ===== 起動 =====
