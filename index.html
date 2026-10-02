@@ -1266,7 +1266,7 @@ const tile = (k, v, u, d, cls) => ({k, v, u, d, cls});
 const upStd = (x, list) => list.find(s => s >= x - 1e-9);
 
 const TOOLS = [];
-const GORDER = ['かんたん換算', '基本・電力', '変圧器', '短絡・地絡・保護', '試験・点検', '負荷・電線', '照明'];
+const GORDER = ['かんたん換算', '基本・電力', '変圧器', '短絡・地絡・保護', '試験・点検', '負荷・電線', '配線・施工', '照明'];
 let toolQ = '';
 const addTool = t => TOOLS.push(t);
 
@@ -1559,16 +1559,20 @@ function toolGroups(q) {
     if (nq && !(x.name + x.g + x.desc).toLowerCase().replace(/\s+/g, '').includes(nq)) continue;
     let g = groups.find(g => g.n === x.g); if (!g) groups.push(g = {n: x.g, items: []}); g.items.push(x);
   }
-  return groups.sort((a, b) => GORDER.indexOf(a.n) - GORDER.indexOf(b.n));
+  groups.sort((a, b) => GORDER.indexOf(a.n) - GORDER.indexOf(b.n));
+  // 検索していないときは、最近使ったツールを先頭に
+  const rec = (S.recentTools || []).map(id => TOOLS.find(t => t.id === id)).filter(Boolean);
+  if (!nq && rec.length) groups.unshift({n: '最近使ったツール', items: rec, recent: true});
+  return groups;
 }
-function curTool() { return TOOLS.find(t => t.id === S.tool) || toolGroups('')[0].items[0]; }
+function curTool() { return TOOLS.find(t => t.id === S.tool) || toolGroups('').find(g => !g.recent).items[0]; }
 function renderToolMenu() {
   const t = curTool(), groups = toolGroups(toolQ);
   $('#tool-list').innerHTML = groups.length ? groups.map(g => `<div class="tg">${esc(g.n)}</div>` + g.items.map(x => `<button type="button" data-id="${x.id}" aria-current="${x.id === t.id}">${esc(x.name)}</button>`).join('')).join('')
     : '<p class="small" style="margin:6px 10px">見つかりません</p>';
   const inSel = groups.some(g => g.items.includes(t));
   $('#tool-sel').innerHTML = (inSel ? '' : `<option value="${t.id}" selected>${esc(t.name)}</option>`) +
-    groups.map(g => `<optgroup label="${esc(g.n)}">` + g.items.map(x => `<option value="${x.id}"${x.id === t.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('') + '</optgroup>').join('');
+    groups.map(g => `<optgroup label="${esc(g.n)}">` + g.items.map(x => `<option value="${x.id}"${x.id === t.id && !g.recent ? ' selected' : ''}>${esc(x.name)}</option>`).join('') + '</optgroup>').join('');
   $('#tool-count').textContent = `${TOOLS.length}種類`;
 }
 function renderToolForm() {
@@ -1604,7 +1608,10 @@ function renderToolOut() {
   $('#tool-notes').hidden = !(r.notes && r.notes.length);
 }
 function renderTools() { renderToolMenu(); renderToolForm(); renderToolOut(); }
-function setTool(id) { S.tool = id; save(); renderTools(); if (matchMedia('(max-width:860px)').matches) $('#view-tools').scrollIntoView({block: 'start'}); }
+function setTool(id) {
+  S.tool = id;
+  S.recentTools = [id].concat((S.recentTools || []).filter(x => x !== id)).slice(0, 5);
+  save(); renderTools(); if (matchMedia('(max-width:860px)').matches) $('#view-tools').scrollIntoView({block: 'start'}); }
 $('#tool-list').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) setTool(b.dataset.id); };
 $('#tool-sel').onchange = e => setTool(e.target.value);
 $('#tool-form').addEventListener('input', e => {
@@ -2460,6 +2467,502 @@ addTool({
   calc(v) {
     const rows = ILLUM_REC.filter(r => v.cat === 'all' || r[0] === v.cat).map(r => [r[0], r[1], String(r[2]), r[3] != null ? String(r[3]) : '–', r[4] != null ? String(r[4]) : '–']);
     return {tiles: [tile('件数', rows.length, '件', v.cat === 'all' ? 'すべての施設' : v.cat)], table: {h: '推奨照度(維持照度 Em)', head: ['施設', '場所・作業', '照度 lx', 'UGR上限', 'Ra下限'], rows}, notes: [ILLUM_NOTE]};
+  }
+});
+
+// ===== 追加ツール(配線設計・保護・点検) =====
+// 電技解釈 第149条 149-1表(分岐回路の過電流遮断器と電線の太さ)
+const T149 = [
+  ['15', '15A以下', '1.6mm'], ['20m', '15A超20A以下(配線用遮断器)', '1.6mm'], ['20f', '15A超20A以下(ヒューズ等)', '2.0mm'],
+  ['30', '20A超30A以下', '2.6mm(5.5mm²)'], ['40', '30A超40A以下', '8mm²'], ['50', '40A超50A以下', '14mm²']
+];
+addTool({
+  id: 'branch', g: '配線・施工', name: '分岐回路の遮断器と電線の太さ(第149条)',
+  desc: '分岐回路の過電流遮断器の定格から、使える電線の最小の太さ(軟銅線)を求めます。電技解釈 第149条 149-1表。',
+  fields: [{id: 'b', l: '分岐回路の過電流遮断器', t: 'sel', d: '20m', o: T149.map(r => [r[0], r[1]])}],
+  calc(v) {
+    const r = T149.find(x => x[0] === v.b);
+    return {
+      tiles: [tile('電線の最小の太さ', r[2], '', `${r[1]}`, 'cu')],
+      table: {h: '149-1表 分岐回路の過電流遮断器と電線の太さ', head: ['過電流遮断器の定格', '軟銅線の太さ'], rows: T149.map(x => [x[1], x[2]]), hl: T149.indexOf(r)},
+      notes: ['「軟銅線、またはこれと同等以上の許容電流のもの」です。コンセント等から分岐点までが3m以下の部分は、149-2表により細くできる場合があります。', '電動機専用の分岐回路は、電線の許容電流を定格電流の1.25倍(50A超は1.1倍)以上にします(「幹線の遮断器と電線」ツールでも計算できます)。']
+    };
+  }
+});
+addTool({
+  id: 'trunk', g: '配線・施工', name: '幹線の遮断器と電線(第148条)',
+  desc: '電動機と他の負荷の定格電流から、幹線に必要な許容電流と、幹線を保護する過電流遮断器の上限を求めます。',
+  fields: [
+    {id: 'im', l: '電動機等の定格電流の合計 ΣIM', u: 'A', d: 60},
+    {id: 'ih', l: 'その他の機器の定格電流の合計 ΣIH', u: 'A', d: 20},
+    {id: 'iw', l: '選んだ電線の許容電流(わかれば)', u: 'A', d: 0}
+  ],
+  calc(v) {
+    const IM = v.im, IH = v.ih;
+    let req, how;
+    if (IM <= IH) { req = IM + IH; how = 'ΣIM ≦ ΣIH なので ΣIM + ΣIH'; }
+    else if (IM <= 50) { req = 1.25 * IM + IH; how = 'ΣIM > ΣIH・50A以下なので 1.25ΣIM + ΣIH'; }
+    else { req = 1.1 * IM + IH; how = 'ΣIM > ΣIH・50A超なので 1.1ΣIM + ΣIH'; }
+    const IW = v.iw > 0 ? v.iw : req;
+    let ibMax, ibHow;
+    if (IM === 0) { ibMax = IW; ibHow = '電動機がないので 電線の許容電流 以下'; }
+    else { const a = 3 * IM + IH; if (a > 2.5 * IW) { ibMax = 2.5 * IW; ibHow = `3ΣIM + ΣIH(${na(a)}A)が 2.5 × 許容電流を超えるので 2.5 × ${na(IW)}A`; } else { ibMax = a; ibHow = '3ΣIM + ΣIH'; } }
+    let std = breakerFor(ibMax), up = false;
+    if (IW > 100 && std !== ibMax) { const u = breakerUp(ibMax); if (u) { std = u; up = true; } }
+    return {
+      tiles: [tile('電線に必要な許容電流', na(req, 1), 'A', how, 'cu'), tile('遮断器の定格の上限', na(ibMax, 1), 'A', ibHow),
+        tile('選べる標準定格', std || '–', std ? 'A' : '', up ? '許容電流100A超のため直近上位の標準定格まで可' : '上限以下で最大の標準定格', 'ok'),
+        tile('IW の値', na(IW, 1), 'A', v.iw > 0 ? '入力した電線の許容電流' : '必要な許容電流で計算(電線が決まったら入力)')],
+      steps: [{b: '必要な許容電流', s: how, v: na(req, 1) + ' A'}, {op: '→', b: '遮断器の上限', s: ibHow, v: na(ibMax, 1) + ' A', cls: 'total'}],
+      notes: ['電技解釈 第148条。需要率・力率がわかっている場合は修正した値を使えます。2.5 × 許容電流の「許容電流」には146-4表の電流減少係数を掛けなくてよいとされています。', '幹線の分岐点から8m以下で許容電流が電源側遮断器の35%以上、または許容電流が55%以上なら、分岐幹線の遮断器を省略できる場合があります(第148条第1項第4号)。']
+    };
+  }
+});
+
+addTool({
+  id: 'trpar', g: '変圧器', name: '変圧器の並行運転の負荷分担',
+  desc: '%インピーダンスが違う変圧器を並行運転したとき、それぞれが受け持つ負荷を求めます。',
+  fields: [
+    {id: 's1', l: '変圧器1 容量', u: 'kVA', d: 300}, {id: 'z1', l: '変圧器1 %Z', u: '%', d: 3.5, step: 0.1},
+    {id: 's2', l: '変圧器2 容量', u: 'kVA', d: 200}, {id: 'z2', l: '変圧器2 %Z', u: '%', d: 3.0, step: 0.1},
+    {id: 's3', l: '変圧器3 容量(なければ0)', u: 'kVA', d: 0}, {id: 'z3', l: '変圧器3 %Z', u: '%', d: 3.0, step: 0.1},
+    {id: 'load', l: '合計の負荷', u: 'kVA', d: 450}
+  ],
+  calc(v) {
+    const tr = [[v.s1, v.z1], [v.s2, v.z2], [v.s3, v.z3]].filter(x => x[0] > 0 && x[1] > 0);
+    const w = tr.map(([s, z]) => s / z), sw = w.reduce((a, b) => a + b, 0);
+    const sh = w.map(x => v.load * x / sw), rate = sh.map((x, i) => x / tr[i][0] * 100);
+    const maxLoad = Math.min(...tr.map(([s], i) => s / (w[i] / sw)));
+    return {
+      tiles: tr.map(([s, z], i) => tile(`変圧器${i + 1}(${s}kVA・${z}%)`, na(sh[i]), 'kVA', `負荷率 ${nfix(rate[i], 1)}%`, rate[i] > 100 ? 'ng' : '')).concat([
+        tile('過負荷にならない最大の負荷', na(maxLoad), 'kVA', `容量の合計 ${na(tr.reduce((a, x) => a + x[0], 0))}kVA`, 'cu')]),
+      steps: [{b: '分担の比', s: '容量 ÷ %Z に比例', v: w.map(x => na(x, 1)).join(' : ')}],
+      notes: ['%Zの小さい変圧器ほど多く分担します。並行運転には、変圧比・極性・相回転・位相変位が同じこと、%R と %X の比が近いことが必要です。']
+    };
+  }
+});
+
+addTool({
+  id: 'touch', g: '短絡・地絡・保護', name: '地絡時の接触電圧(B種・D種接地)',
+  desc: '低圧機器で地絡したとき、外箱に現れる対地電圧(接触電圧)と地絡電流を求めます。',
+  fields: [
+    {id: 'e', l: '地絡した電線の対地電圧', u: 'V', d: 100, chips: [100, 115, 200, 230, 240]},
+    {id: 'rb', l: 'B種接地抵抗', u: 'Ω', d: 10},
+    {id: 'rd', l: '機器のD種(C種)接地抵抗', u: 'Ω', d: 50},
+    {id: 'rh', l: '人体の抵抗(考えないなら0)', u: 'Ω', d: 0, chips: [0, 500, 1000]}
+  ],
+  calc(v) {
+    const rd = v.rh > 0 ? v.rd * v.rh / (v.rd + v.rh) : v.rd;
+    const ig = v.e / (v.rb + rd), vt = ig * rd, ih = v.rh > 0 ? vt / v.rh : 0;
+    return {
+      tiles: [tile('外箱の対地電圧', na(vt, 1), 'V', `${v.e}V × Rd ÷ (Rb + Rd)`, vt > 50 ? 'ng' : 'cu'), tile('地絡電流', na(ig, 2), 'A', `${v.e}V ÷ (${v.rb} + ${na(rd, 1)})Ω`),
+        tile('人体に流れる電流', v.rh > 0 ? na(ih * 1000, 1) : '–', v.rh > 0 ? 'mA' : '', v.rh > 0 ? `人体 ${v.rh}Ω` : '人体の抵抗を入れると計算')],
+      steps: [{b: '地絡電流', s: `E ÷ (Rb + Rd)`, v: na(ig, 2) + ' A'}, {op: '×', b: 'D種接地抵抗', s: `${na(rd, 1)}Ω`, v: na(vt, 1) + ' V', cls: 'total'}],
+      notes: ['B種とD種の接地抵抗で地絡電流が分圧される考え方です。電線の抵抗と地絡点の抵抗は無視しています。D種接地を下げるか、漏電遮断器で速やかに遮断するのが基本の対策です。']
+    };
+  }
+});
+
+addTool({
+  id: 'vunbal', g: '試験・点検', name: '三相電圧の不平衡率',
+  desc: '3つの線間電圧の測定値から電圧不平衡率を求めます。',
+  fields: [{id: 'a', l: 'Vab', u: 'V', d: 206}, {id: 'b', l: 'Vbc', u: 'V', d: 202}, {id: 'c', l: 'Vca', u: 'V', d: 198}],
+  calc(v) {
+    const xs = [v.a, v.b, v.c], avg = (v.a + v.b + v.c) / 3, dev = Math.max(...xs.map(x => Math.abs(x - avg))) / avg * 100;
+    const beta = (v.a ** 4 + v.b ** 4 + v.c ** 4) / (v.a ** 2 + v.b ** 2 + v.c ** 2) ** 2, s = Math.sqrt(Math.max(0, 3 - 6 * beta));
+    const vuf = Math.sqrt((1 - s) / (1 + s)) * 100;
+    return {
+      tiles: [tile('逆相電圧の割合(VUF)', nfix(vuf, 2), '%', '逆相電圧 ÷ 正相電圧', 'cu'), tile('平均からの最大偏差', nfix(dev, 2), '%', '最大偏差 ÷ 平均(NEMA式)'), tile('平均電圧', na(avg, 1), 'V')],
+      notes: ['VUF は線間電圧の大きさだけから逆相分を求める式(IEC 61000-4-30 と同じ考え方)。三相誘導電動機は電圧不平衡で電流不平衡が数倍に拡大し、温度上昇の原因になります。']
+    };
+  }
+});
+addTool({
+  id: 'demandp', g: '試験・点検', name: 'デマンドの予測(30分)',
+  desc: '30分の時限の途中で、このままの電力が続いたときの最大需要電力(デマンド)を予測し、目標に収めるための残り時間の電力を求めます。',
+  fields: [
+    {id: 't', l: '時限の経過時間', u: '分', d: 15, chips: [5, 10, 15, 20, 25]},
+    {id: 'used', l: 'これまでの使用電力量(この時限)', u: 'kWh', d: 120},
+    {id: 'p', l: '現在の電力', u: 'kW', d: 520},
+    {id: 'target', l: '目標デマンド', u: 'kW', d: 480}
+  ],
+  calc(v) {
+    const rest = (30 - v.t) / 60, pred = (v.used + v.p * rest) * 2, allow = rest > 0 ? (v.target / 2 - v.used) / rest : NaN;
+    return {
+      tiles: [tile('予測デマンド', na(pred, 0), 'kW', '(使用量 + 現在電力 × 残り時間) × 2', pred > v.target ? 'ng' : 'ok'),
+        tile('残り時間で使える平均電力', isFinite(allow) ? na(Math.max(0, allow), 0) : '–', 'kW', `目標 ${v.target}kW に収めるには`, 'cu'),
+        tile('下げるべき電力', isFinite(allow) ? na(Math.max(0, v.p - allow), 0) : '–', 'kW', '現在の電力から')],
+      notes: ['デマンドは30分間の使用電力量 × 2 で求まる平均電力です。毎時0分・30分から始まる時限ごとに計算されます。']
+    };
+  }
+});
+addTool({
+  id: 'twowatt', g: '試験・点検', name: '2電力計法(三相電力の測定)',
+  desc: '2台の単相電力計の指示から、三相の有効電力・無効電力・力率を求めます。',
+  fields: [{id: 'w1', l: '電力計 W1', u: 'kW', d: 12}, {id: 'w2', l: '電力計 W2(逆振れは負の値)', u: 'kW', d: 6}],
+  calc(v) {
+    const P = v.w1 + v.w2, Q = SQ3 * (v.w1 - v.w2), S = Math.hypot(P, Q), pf = P / S;
+    return {
+      tiles: [tile('有効電力', na(P), 'kW', 'W1 + W2', 'cu'), tile('無効電力', na(Math.abs(Q)), 'kVAR', '√3 × (W1 − W2)'), tile('皮相電力', na(S), 'kVA'), tile('力率', nfix(pf * 100, 1), '%', '')],
+      notes: ['平衡三相負荷の場合です。力率が0.5を下回ると一方の電力計が逆振れするので、その値は負として入れます。']
+    };
+  }
+});
+
+addTool({
+  id: 'rlc', g: '基本・電力', name: '交流回路のインピーダンス(R・L・C)',
+  desc: '抵抗・インダクタンス・静電容量の直列回路のリアクタンス、インピーダンス、電流、力率、共振周波数を求めます。',
+  fields: [
+    {id: 'f', l: '周波数', t: 'sel', o: FREQ, d: '60'}, {id: 'v', l: '電圧', u: 'V', d: 100},
+    {id: 'r', l: '抵抗 R', u: 'Ω', d: 10}, {id: 'l', l: 'インダクタンス L', u: 'mH', d: 50}, {id: 'c', l: '静電容量 C(なければ0)', u: 'μF', d: 0}
+  ],
+  calc(v) {
+    const w = 2 * Math.PI * (+v.f), XL = w * v.l / 1000, XC = v.c > 0 ? 1 / (w * v.c * 1e-6) : 0, X = XL - XC, Z = Math.hypot(v.r, X);
+    const I = v.v / Z, pf = v.r / Z, f0 = v.l > 0 && v.c > 0 ? 1 / (2 * Math.PI * Math.sqrt(v.l / 1000 * v.c * 1e-6)) : null;
+    return {
+      tiles: [tile('インピーダンス Z', na(Z, 3), 'Ω', `√(R² + (XL − XC)²)`, 'cu'), tile('電流', na(I, 3), 'A', `${v.v}V ÷ Z`), tile('力率', nfix(pf * 100, 1), '%', X >= 0 ? '遅れ' : '進み'),
+        tile('XL', na(XL, 3), 'Ω', '2πfL'), tile('XC', v.c > 0 ? na(XC, 3) : '–', v.c > 0 ? 'Ω' : '', '1 ÷ 2πfC'), tile('共振周波数', f0 ? na(f0, 2) : '–', f0 ? 'Hz' : '', '1 ÷ (2π√LC)')]
+    };
+  }
+});
+addTool({
+  id: 'capconv', g: '基本・電力', name: 'コンデンサの容量換算(μF ⇔ kvar)',
+  desc: 'コンデンサの静電容量と無効電力(kvar)を換算します。',
+  fields: [
+    {id: 'mode', l: '換算', t: 'sel', d: 'c2q', o: [['c2q', 'μF → kvar'], ['q2c', 'kvar → μF']]},
+    {id: 'conn', l: '静電容量の表し方', t: 'sel', d: 'c', o: [['c', '三相 カタログ表記のμF(低圧進相コンデンサ)'], ['1', '単相'], ['d', '三相 Δ結線の各辺の静電容量']]},
+    {id: 'f', l: '周波数', t: 'sel', o: FREQ, d: '60'}, {id: 'v', l: '電圧(線間)', u: 'V', d: 200, chips: [100, 200, 400, 6600]},
+    {id: 'x', l: '値(μF または kvar)', u: '', d: 50}
+  ],
+  calc(v) {
+    const w = 2 * Math.PI * (+v.f), k = v.conn === 'd' ? 3 : 1; // Δ各辺: 3ωCV²、カタログ表記(Y換算1相分)・単相: ωCV²
+    const q = C => k * w * C * 1e-6 * v.v * v.v / 1000;
+    return v.mode === 'c2q'
+      ? {tiles: [tile('無効電力', na(q(v.x), 3), 'kvar', `${k === 3 ? '3 × ' : ''}2πf × C × V²`, 'cu'), tile('電流', na(q(v.x) * 1000 / ((v.conn === '1' ? 1 : SQ3) * v.v), 2), 'A', '線電流')], notes: [CAP_NOTE]}
+      : {tiles: [tile('静電容量(各相)', na(v.x * 1000 / (k * w * v.v * v.v) * 1e6, 2), 'μF', 'Q ÷ (k × 2πf × V²)', 'cu')], notes: [CAP_NOTE]};
+  }
+});
+const CAP_NOTE = '低圧進相コンデンサ(三相200V)のカタログの μF は Q = 2πf × C × V²(V=線間電圧)となる値です(三菱電機 MG-2 カタログで確認: 10μF・200V・50Hz = 0.13kvar、60Hz = 0.15kvar)。Δ結線の各辺の静電容量で考えるときは Q = 3 × 2πf × C × V² です。';
+
+// ===== 追加ツール(施工データを使うもの: 電線管・曲げ半径・引入れ張力) =====
+// 出典: 電線管内径=丸一鋼管・パナソニック・未来工業・古河電工・積水化学のカタログ、電線外径・質量=昭和電線/古河(SFCC)・住電HST・富士電線系カタログ、
+//       占積率=内線規程3110・3115節(農水省 電気設備工事施工指針の引用)、曲げ半径・許容張力・側圧=昭和電線・フジクラ・ダイヤ・北日本電線の技術資料
+const CONDUITS = {
+  C: {name: '薄鋼電線管(C)', id: {C19: 15.9, C25: 22.2, C31: 28.6, C39: 34.9, C51: 47.6, C63: 59.5, C75: 72.2}},
+  G: {name: '厚鋼電線管(G)', id: {G16: 16.4, G22: 21.9, G28: 28.3, G36: 36.9, G42: 42.8, G54: 54.0, G70: 69.6, G82: 82.3, G92: 93.7, G104: 106.4}},
+  E: {name: 'ねじなし電線管(E)', id: {E19: 16.7, E25: 23.0, E31: 29.0, E39: 35.3, E51: 48.0, E63: 60.3, E75: 72.6}},
+  PF: {name: '合成樹脂製可とう電線管(PF)', id: {PF14: 14, PF16: 16, PF22: 22, PF28: 28, PF36: 36, PF42: 42}},
+  CD: {name: 'CD管', id: {CD14: 14, CD16: 16, CD22: 22, CD28: 28, CD36: 36}},
+  VE: {name: '硬質ビニル電線管(VE)', id: {VE14: 14.4, VE16: 18.4, VE22: 22.4, VE28: 28.6, VE36: 35.8, VE42: 40.8, VE54: 51.8, VE70: 67.8, VE82: 78.0}},
+  FEP: {name: '波付硬質合成樹脂管(FEP)', id: {FEP30: 30, FEP40: 41, FEP50: 50, FEP65: 66, FEP80: 80, FEP100: 101, FEP125: 125, FEP150: 147}}
+};
+// 絶縁電線の仕上り外径(mm)
+const WIRE_OD = {
+  IV: {'1.6mm': 3.2, '2.0mm': 3.6, '2.6mm': 4.6, '3.2mm': 5.6, '2mm²': 3.4, '3.5mm²': 4.0, '5.5mm²': 5.0, '8mm²': 6.0, '14mm²': 7.6, '22mm²': 9.2, '38mm²': 11.5, '60mm²': 14.0, '100mm²': 17.0, '150mm²': 21, '200mm²': 23, '250mm²': 26, '325mm²': 29},
+  'EM-IE': {'1.6mm': 3.2, '2.0mm': 3.6, '2.6mm': 4.6, '3.2mm': 5.2, '2mm²': 3.4, '3.5mm²': 4.0, '5.5mm²': 5.0, '8mm²': 5.6, '14mm²': 6.8, '22mm²': 8.4, '38mm²': 10.5, '60mm²': 13.0, '100mm²': 17.0, '150mm²': 21, '200mm²': 24, '250mm²': 26, '325mm²': 29}
+};
+WIRE_OD.HIV = WIRE_OD.IV;
+const WSIZES = Object.keys(WIRE_OD.IV);
+// ケーブル: [名前, 外径mm(管選定・曲げ半径の d), 質量kg/m, 導体mm², 心数, 曲げ半径の倍率, 許容側圧N/m]
+const CABLES = [];
+const addCab = (name, od, kg, a, n, bend, side) => CABLES.push({name, od, kg, a, n, bend, side});
+[[2, 11.0, .140], [3.5, 12.5, .195], [5.5, 14.5, .285], [8, 16.0, .385], [14, 17.5, .550], [22, 21, .820], [38, 25, 1.33], [60, 31, 1.97], [100, 40, 3.26], [150, 46, 4.75], [200, 54, 6.39], [250, 59, 7.90], [325, 65, 10.7]]
+  .forEach(([a, od, kg]) => addCab(`600V CV 3心 ${a}mm²`, od, kg, a, 3, 6, 2940));
+[[8, 19.0, .390], [14, 21, .570], [22, 24, .835], [38, 30, 1.32], [60, 33, 1.89], [100, 41, 3.07], [150, 47, 4.45], [200, 55, 5.99], [250, 61, 7.42], [325, 66, 10.1]]
+  .forEach(([a, od, kg]) => addCab(`600V CVT ${a}mm²`, od, kg, a, 3, 6, 2450));
+[[14, 37, 1.19], [22, 42, 1.59], [38, 46, 2.19], [60, 50, 2.97], [100, 57, 4.34], [150, 65, 5.98], [200, 72, 7.92], [250, 76, 9.32], [325, 85, 11.6]]
+  .forEach(([a, od, kg]) => addCab(`6.6kV CVT ${a}mm²`, od, kg, a, 3, 8, 2450));
+[['1.6mm 2心', 9.4, .09, 2.01, 2], ['2.0mm 2心', 10.5, .12, 3.14, 2], ['2.6mm 2心', 12.5, .18, 5.31, 2], ['1.6mm 3心', 13.0, .13, 2.01, 3], ['2.0mm 3心', 14.0, .17, 3.14, 3], ['2.6mm 3心', 17.0, .27, 5.31, 3]]
+  .forEach(([s, od, kg, a, n]) => addCab(`VVF ${s}(長径)`, od, kg, a, n, 6, null));
+const CAB_NOTE = '外径・質量はメーカーにより数%違います。2社で食い違うものは大きい方(安全側)の値です。';
+
+addTool({
+  id: 'conduit', g: '配線・施工', name: '電線管の太さ(占積率)',
+  desc: '管に入れる電線の本数とサイズから、電線管の太さを選びます。絶縁電線は被覆を含む断面積の合計が管の内断面積の32%(条件により48%)以下、ケーブルは管の内径をケーブル外径の1.5倍以上にします。',
+  fields: [
+    {id: 'pipe', l: '電線管の種類', t: 'sel', d: 'E', o: Object.entries(CONDUITS).map(([k, c]) => [k, c.name])},
+    {id: 'kind', l: '入れるもの', t: 'sel', d: 'wire', o: [['wire', '絶縁電線(IV・HIV・EM-IE)'], ['cable', 'ケーブル1条']]},
+    {id: 'rule', l: '占積率', t: 'sel', d: '32', o: [['32', '32%(一般・太さが違う電線)'], ['48', '48%(屈曲が少なく引替えが容易)']], show: v => v.kind === 'wire'},
+    {id: 'wt', l: '電線の種類', t: 'sel', d: 'IV', o: [['IV', 'IV'], ['HIV', 'HIV'], ['EM-IE', 'EM-IE']], show: v => v.kind === 'wire'},
+    {id: 's1', l: 'サイズ①', t: 'sel', d: '5.5mm²', o: WSIZES.map(s => [s, s]), show: v => v.kind === 'wire'},
+    {id: 'n1', l: '本数①', u: '本', d: 3, chips: [1, 2, 3, 4, 6], show: v => v.kind === 'wire'},
+    {id: 's2', l: 'サイズ②', t: 'sel', d: '2mm²', o: WSIZES.map(s => [s, s]), show: v => v.kind === 'wire'},
+    {id: 'n2', l: '本数②(なければ0)', u: '本', d: 0, show: v => v.kind === 'wire'},
+    {id: 's3', l: 'サイズ③', t: 'sel', d: '1.6mm', o: WSIZES.map(s => [s, s]), show: v => v.kind === 'wire'},
+    {id: 'n3', l: '本数③(なければ0)', u: '本', d: 0, show: v => v.kind === 'wire'},
+    {id: 'cab', l: 'ケーブル', t: 'sel', d: '10', o: CABLES.map((c, i) => [String(i), `${c.name}(外径${c.od}mm)`]), show: v => v.kind === 'cable'}
+  ],
+  calc(v) {
+    const P = CONDUITS[v.pipe], list = Object.entries(P.id);
+    if (v.kind === 'cable') {
+      const c = CABLES[+v.cab], need = c.od * 1.5, pick = list.find(([, d]) => d >= need - 1e-9);
+      return {
+        tiles: [tile('必要な管の内径', na(need, 1), 'mm', `外径 ${c.od}mm × 1.5`), tile('選定', pick ? pick[0] : '該当なし', '', pick ? `内径 ${pick[1]}mm` : `${P.name}の最大サイズでも足りません`, pick ? 'ok' : 'ng')],
+        table: {h: `${P.name}の内径とケーブル外径の比`, head: ['管', '内径 mm', '内径 ÷ 外径', '判定'], rows: list.map(([k, d]) => [k, String(d), nfix(d / c.od, 2), d >= need - 1e-9 ? 'OK' : '不足']), hl: pick ? list.indexOf(pick) : undefined},
+        notes: ['ケーブルを管に収めるときは、管の内径をケーブル仕上り外径の1.5倍以上にします(短くて屈曲がなく、引替えが容易な場合は1.5倍未満でもよい、とされています)。', CAB_NOTE]
+      };
+    }
+    const od = WIRE_OD[v.wt], items = [[v.s1, v.n1], [v.s2, v.n2], [v.s3, v.n3]].filter(x => x[1] > 0);
+    const area = items.reduce((a, [s, n]) => a + n * Math.PI * od[s] ** 2 / 4, 0), pct = +v.rule;
+    const pick = list.find(([, d]) => area / (Math.PI * d * d / 4) * 100 <= pct + 1e-9);
+    const small = items.some(([s]) => /^(1\.6|2\.0|2\.6|3\.2)mm$|^(2|3\.5|5\.5|8)mm²$/.test(s));
+    return {
+      tiles: [tile('電線の断面積の合計', na(area, 1), 'mm²', items.map(([s, n]) => `${s}×${n}`).join(' + ')),
+        tile('選定', pick ? pick[0] : '該当なし', '', pick ? `占積率 ${nfix(area / (Math.PI * pick[1] ** 2 / 4) * 100, 1)}%(${pct}%以下)` : `${P.name}の最大サイズでも足りません`, pick ? 'ok' : 'ng')],
+      table: {h: `${P.name}の占積率`, head: ['管', '内径 mm', '内断面積 mm²', '占積率 %', '判定'],
+        rows: list.map(([k, d]) => { const A = Math.PI * d * d / 4, r = area / A * 100; return [k, String(d), na(A, 0), nfix(r, 1), r <= pct + 1e-9 ? 'OK' : '超過']; }), hl: pick ? list.indexOf(pick) : undefined},
+      notes: [(small ? '<b>8mm²以下の細い電線が含まれています。</b>内線規程では細い電線に補正係数を掛けた表(3110-2〜3110-4表など)で選ぶため、この計算より太い管になることがあります。必ず内線規程の表でも確認してください。' : '内線規程の表(3110-7表など)の考え方による断面積の計算です。'),
+        '屈曲は直角に近いものを3か所以内とし、それを超えるときや亘長が30mを超えるときはプルボックスを入れます。VE管の内径は外径と最小肉厚からの計算値、FEP管は2社で違うため小さい方の値です。']
+    };
+  }
+});
+
+addTool({
+  id: 'bend', g: '配線・施工', name: 'ケーブルの許容曲げ半径',
+  desc: 'ケーブルの種類と外径から、施工時に守る最小の曲げ半径を求めます。',
+  fields: [
+    {id: 'src', l: 'ケーブル', t: 'sel', d: '10', o: CABLES.map((c, i) => [String(i), `${c.name}(外径${c.od}mm・${c.bend}倍)`]).concat([['manual', '外径と種類を直接入力']])},
+    {id: 'k', l: '種類', t: 'sel', d: '6', o: [['8', '絶縁電線(8倍)'], ['8s', '低圧 単心ケーブル 遮へいなし(8倍)'], ['6', '低圧 多心・CVT(6倍)'], ['10', '高圧 単心(遮へい付き 10倍)'], ['8h', '高圧 3心・CVT(遮へい付き 8倍)'], ['6m', 'キャブタイヤ 移動用 単心(6倍)'], ['4', 'キャブタイヤ 移動用 多心(4倍)']], show: v => v.src === 'manual'},
+    {id: 'd', l: 'ケーブルの仕上り外径', u: 'mm', d: 25, show: v => v.src === 'manual'}
+  ],
+  calc(v) {
+    let d, k, name;
+    if (v.src === 'manual') { d = v.d; k = parseFloat(v.k); name = '入力値'; } else { const c = CABLES[+v.src]; d = c.od; k = c.bend; name = c.name; }
+    return {
+      tiles: [tile('許容曲げ半径', na(d * k, 0), 'mm', `外径 ${d}mm × ${k}`, 'cu'), tile('曲げの直径', na(d * k * 2, 0), 'mm', '半径 × 2'), tile('倍率', k, '倍', name)],
+      notes: ['昭和電線・フジクラ・ダイヤ・北日本電線の技術資料: 遮へいのないケーブルは単心8倍・多心6倍、600V CVT 6倍、遮へい付き(高圧)は単心10倍・多心とトリプレックス8倍、移動用キャブタイヤは単心6倍・多心4倍。トリプレックスはより合せ外径で計算します。', 'VVFの外径は長径の値です(平形のdの定義はメーカー資料で確認してください)。' + CAB_NOTE]
+    };
+  }
+});
+
+addTool({
+  id: 'pull', g: '配線・施工', name: 'ケーブルの引入れ張力と側圧',
+  desc: '管路にケーブルを引き入れるときの張力を、直線部と曲がり部ごとに積み上げて求め、許容張力・許容側圧と比べます。',
+  fields: [
+    {id: 'cab', l: 'ケーブル', t: 'sel', d: '18', o: CABLES.map((c, i) => [String(i), `${c.name}(${c.kg}kg/m)`])},
+    {id: 'mu', l: '摩擦係数 μ', u: '', d: 0.48, step: 0.01, chips: [0.38, 0.48]},
+    {id: 'l1', l: '直線① の長さ', u: 'm', d: 30}, {id: 'b1', l: '曲がり① の角度', u: '°', d: 90, chips: [0, 30, 45, 90]},
+    {id: 'l2', l: '直線② の長さ', u: 'm', d: 20}, {id: 'b2', l: '曲がり② の角度', u: '°', d: 0, chips: [0, 30, 45, 90]},
+    {id: 'l3', l: '直線③ の長さ', u: 'm', d: 0},
+    {id: 'r', l: '曲がり部の半径', u: 'm', d: 1.0, step: 0.1}
+  ],
+  calc(v) {
+    const c = CABLES[+v.cab], W = c.kg * 9.80665; // N/m
+    let T = 0, maxSide = 0; const steps = [];
+    const seg = [['直線①', v.l1, 'l'], ['曲がり①', v.b1, 'b'], ['直線②', v.l2, 'l'], ['曲がり②', v.b2, 'b'], ['直線③', v.l3, 'l']];
+    for (const [n, x, t] of seg) {
+      if (!(x > 0)) continue;
+      if (t === 'l') { T += v.mu * W * x; steps.push({op: '+', b: n, s: `μ × W × L = ${v.mu} × ${na(W, 1)}N/m × ${x}m`, v: na(T, 0) + ' N'}); }
+      else { T *= Math.exp(v.mu * x * Math.PI / 180); maxSide = Math.max(maxSide, T / v.r); steps.push({op: '×', b: n, s: `e^(μθ) = e^(${v.mu} × ${x}°)、側圧 ${na(T / v.r, 0)}N/m`, v: na(T, 0) + ' N'}); }
+    }
+    const allow = 68.6 * c.a * c.n;
+    if (steps.length) steps[steps.length - 1].cls = 'total';
+    return {
+      tiles: [tile('引入れ張力', na(T, 0), 'N', `約 ${na(T / 9.80665, 0)}kgf`, T <= allow ? 'cu' : 'ng'),
+        tile('導体の許容張力', na(allow, 0), 'N', `68.6N/mm² × ${c.a}mm² × ${c.n}心`, T <= allow ? 'ok' : 'ng'),
+        tile('最大の側圧', maxSide ? na(maxSide, 0) : '–', maxSide ? 'N/m' : '', c.side ? `許容 ${c.side}N/m` : '許容値はメーカーに確認', c.side && maxSide > c.side ? 'ng' : 'ok')],
+      steps,
+      notes: ['直線部 T = T₀ + μWL、曲がり部 T = T₀ × e^(μθ)(自重の影響は無視)。曲がり部の側圧 = 張力 ÷ 曲げ半径。張力の大きくなる向き(曲がりを手前にする等)で引く順番を検討してください。', '摩擦係数は日立評論(1972)のビニルシースと管路の値(乾燥0.48、潤滑剤0.38)。トラフ・ローラーの値は確認できていません。', '許容張力は銅導体の 7kgf/mm²(68.6N/mm²)を心数分で計算しています(引き手の付け方によっては少なくなります)。許容側圧は CV 2,940N/m、CVT 2,450N/m(メーカー技術資料)。' + CAB_NOTE]
+    };
+  }
+});
+
+// ===== 追加ツール(内線規程・高圧保護・接地・CT・太陽光・住宅) =====
+// ---------- 電圧降下の許容値(内線規程 1310節) ----------
+// 出典: ケーワイテック・フジクラ・ダイヤの技術資料、内線規程の解説(版は未確認)
+addTool({
+  id: 'vdlimit', g: '負荷・電線', name: '電圧降下の許容値(内線規程)',
+  desc: '供給変圧器の二次側端子(低圧受電なら引込線取付点)から最遠端の負荷までのこう長で、許される電圧降下を求めます。',
+  fields: [
+    {id: 'len', l: 'こう長(変圧器・引込点から最遠端まで)', u: 'm', d: 80, chips: [30, 60, 100, 120, 150, 200, 250]},
+    {id: 'sup', l: '供給のしかた', t: 'sel', d: 'tr', o: [['tr', '構内の変圧器から供給(高圧受電など)'], ['lv', '電力会社から低圧で受電']]},
+    {id: 'v', l: '電圧(%をVに換算)', u: 'V', d: 200, chips: [100, 200, 400]}
+  ],
+  calc(v) {
+    const tr = v.sup === 'tr';
+    if (v.len <= 60) {
+      const tk = tr ? 3 : 2, br = 2;
+      return {
+        tiles: [tile('幹線', tk, '%以下', `${na(v.v * tk / 100, 1)}V`, 'cu'), tile('分岐回路', br, '%以下', `${na(v.v * br / 100, 1)}V`, 'cu')],
+        table: VD_TABLE(v), notes: [VD_NOTE]
+      };
+    }
+    const tot = v.len <= 120 ? (tr ? 5 : 4) : v.len <= 200 ? (tr ? 6 : 5) : (tr ? 7 : 6);
+    return {tiles: [tile('幹線と分岐回路の合計', tot, '%以下', `${na(v.v * tot / 100, 1)}V`, 'cu'), tile('配分の例', `幹線${tot - 2}・分岐2`, '%', '分岐回路に2%を残す配分が多い')], table: VD_TABLE(v), notes: [VD_NOTE]};
+  }
+});
+const VD_TABLE = v => ({h: '内線規程 1310-1表の考え方', head: ['こう長', '構内の変圧器から', '低圧で受電'], rows: [['60m以下', '幹線3%・分岐2%', '幹線2%・分岐2%'], ['120m以下', '合計5%', '合計4%'], ['200m以下', '合計6%', '合計5%'], ['200m超', '合計7%', '合計6%']],
+  hl: v.len <= 60 ? 0 : v.len <= 120 ? 1 : v.len <= 200 ? 2 : 3});
+const VD_NOTE = '60m以下は幹線・分岐回路それぞれの値、60m超は幹線と分岐回路の合計の値です。電圧降下の計算は「負荷から選定」タブや「電圧降下」ツールで行えます。';
+
+// ---------- 高圧限流ヒューズ(PF) ----------
+// 出典: 三菱電機 CL/CLS形カタログ(表5・表6・表7)、富士電機 HHヒューズ Eシリーズ・JCシリーズ カタログ。メーカーごとに値が違うので両方を表示
+const PF_TR_MITSU = {
+  1: {5: ['G5(T1.5)', 'G5(T1.5)'], 10: ['G10(T3)', 'G10(T3)'], 20: ['G20(T7.5)', 'G20(T7.5)'], 30: ['G20(T7.5)', 'G30(T15)'], 50: ['G30(T15)', 'G40(T20)'], 75: ['G30(T15)', 'G60(T40)'], 100: ['G40(T20)', 'G75(T50)'], 150: ['G50(T30)', 'G75(T60)'], 200: ['G60(T40)', 'G100(T75)'], 300: ['G75(T50)', 'G100(T75)'], 500: ['G150(T100)', 'G200(T150)'], 750: ['G200(T150)', 'G200(T150)'], 1000: ['G300(T250)', 'G300(T250)'], 1500: ['G300(T250)', 'G400(T300)']},
+  3: {10: ['G5(T1.5)', 'G5(T1.5)'], 20: ['G10(T3)', 'G10(T3)'], 30: ['G10(T3)', 'G20(T7.5)'], 50: ['G20(T7.5)', 'G20(T7.5)'], 75: ['G20(T7.5)', 'G40(T20)'], 100: ['G30(T15)', 'G50(T30)'], 150: ['G30(T15)', 'G75(T50)'], 200: ['G40(T20)', 'G75(T50)'], 300: ['G50(T30)', 'G75(T60)'], 500: ['G75(T50)', 'G100(T75)'], 750: ['G100(T75)', 'G100(T75)'], 1000: ['G150(T100)', 'G200(T150)'], 1500: ['G200(T150)', 'G200(T150)'], 2000: ['G300(T250)', 'G400(T300)'], 3000: ['G400(T300)', 'G400(T300)']}
+};
+const PF_TR_FUJI = {3: {20: 10, 30: 20, 50: 20, 75: 20, 100: 30, 150: 40, 200: 40, 300: 75, 500: 75}, 1: {10: 10, 20: 20, 30: 20, 50: 20, 75: 30, 100: 40, 150: 50, 200: 75, 300: 75, 500: 100}};
+// コンデンサ用 三菱: SRなし [G最小, G最大, M最小, M最大] / SR 6%以上 [G, M]
+const PF_SC_MITSU = {10: ['5(C1.5)', '50(C30)', 'M20(C15)', null], 15: ['5(C1.5)', '50(C30)', 'M20(C15)', null], 20: ['10(C3)', '50(C30)', 'M20(C15)', null], 25: ['10(C3)', '50(C30)', 'M20(C15)', 'M20(C15)'], 30: ['10(C3)', '50(C30)', 'M20(C15)', 'M20(C15)'], 50: ['20(C7.5)', '50(C30)', 'M20(C15)', 'M20(C15)'], 75: ['20(C7.5)', '100(C60)', 'M20(C15)', 'M50(C35)'], 100: ['30(C15)', '100(C60)', 'M20(C15)', 'M50(C35)'], 150: ['30(C15)', '150(C75)', 'M50(C35)', 'M100(C70)'], 200: ['40(C20)', '150(C75)', 'M50(C35)', 'M100(C70)'], 250: ['50(C30)', null, 'M50(C35)', null], 300: ['50(C30)', null, 'M50(C35)', null], 400: ['60(C40)/75(C40)', null, 'M100(C70)', null], 500: ['75(C50)', null, 'M100(C70)', null]};
+const PF_SC_MITSU_L6 = {10: [5, 'M20'], 15: [5, 'M20'], 20: [5, 'M20'], 25: [5, 'M20'], 30: [5, 'M20'], 50: [10, 'M20'], 75: [20, 'M20'], 100: [20, 'M20'], 150: [30, 'M20'], 200: [30, 'M50'], 250: [40, 'M50'], 300: [50, 'M50'], 400: [60, 'M50'], 500: ['75(LB)', 'M100']};
+const PF_SC_FUJI_E = {10: 10, 15: 10, 20: 10, 25: 10, 30: 20, 50: 20, 75: 20, 100: 30, 150: 30, 200: 40, 250: 50, 300: 50, 400: 75, 500: 75};
+const PF_SC_FUJI_JC = {10: 5, 20: 10, 30: 10, 50: 20, 75: 30, 100: 30, 150: 40, 200: 50, 250: 60, 300: 60, 400: 75, 500: 100};
+const PF_MOTOR = [[160, 'M20'], [400, 'M50'], [800, 'M100'], [1250, 'M150'], [1500, 'M200'], [2500, 'M300'], [3000, 'M400']];
+addTool({
+  id: 'pf', g: '短絡・地絡・保護', name: '高圧限流ヒューズ(PF)の選定',
+  desc: '6.6kVの変圧器・進相コンデンサ・高圧電動機を保護する限流ヒューズの定格を、メーカーの選定表から引きます。',
+  fields: [
+    {id: 'use', l: '保護するもの', t: 'sel', d: 'tr', o: [['tr', '変圧器'], ['sc', '進相コンデンサ'], ['mo', '高圧三相誘導電動機']]},
+    {id: 'ph', l: '変圧器の相', t: 'sel', o: PH, d: '3', show: v => v.use === 'tr'},
+    {id: 'kva3', l: '変圧器容量', t: 'sel', d: '300', o: Object.keys(PF_TR_MITSU[3]).map(k => [k, k + 'kVA']), show: v => v.use === 'tr' && v.ph === '3'},
+    {id: 'kva1', l: '変圧器容量', t: 'sel', d: '100', o: Object.keys(PF_TR_MITSU[1]).map(k => [k, k + 'kVA']), show: v => v.use === 'tr' && v.ph === '1'},
+    {id: 'kvar', l: 'コンデンサ容量(設備容量)', t: 'sel', d: '100', o: Object.keys(PF_SC_MITSU).map(k => [k, k + 'kvar']), show: v => v.use === 'sc'},
+    {id: 'sr', l: '直列リアクトル', t: 'sel', d: '6', o: [['6', '6%以上あり'], ['0', 'なし']], show: v => v.use === 'sc'},
+    {id: 'kw', l: '電動機の出力', u: 'kW', d: 200, show: v => v.use === 'mo'}
+  ],
+  calc(v) {
+    if (v.use === 'tr') {
+      const k = v.ph === '3' ? v.kva3 : v.kva1, m = PF_TR_MITSU[v.ph][k], f = PF_TR_FUJI[v.ph][k];
+      const In = (+k) * 1000 / ((v.ph === '3' ? SQ3 : 1) * 6600);
+      return {
+        tiles: [tile('三菱電機(CL形)', m[0] === m[1] ? m[0] : `${m[0]}〜${m[1]}`, '', '推奨の最小〜最大', 'cu'), tile('富士電機(Eシリーズ)', f ? `G${f}` : '表にない容量', '', '油入変圧器'),
+          tile('変圧器の1次定格電流', na(In, 2), 'A', `${k}kVA ÷ ${v.ph === '3' ? '(√3 × 6.6kV)' : '6.6kV'}`)],
+        notes: ['三菱の最小値は励磁突入電流(定格の10倍・0.1秒)に3,000回耐える値、最大値は変圧器二次直下の短絡を2秒以内に遮断できる値です。単相2台のV結線は単相容量×3を三相容量とみなします。', 'コンデンサが変圧器容量の1/3を超えて同じヒューズの下にあるときは、コンデンサ定格電流の1/2を加えて選びます(三菱の注記)。' + PF_NOTE]
+      };
+    }
+    if (v.use === 'sc') {
+      const k = v.kvar, In = (+k) * 1000 / (SQ3 * 6600), fe = PF_SC_FUJI_E[k], fj = PF_SC_FUJI_JC[k];
+      const t = v.sr === '6' ? (() => { const x = PF_SC_MITSU_L6[k]; return [tile('三菱(CL形 G)', 'G' + x[0], '', 'SR 6%以上付き', 'cu'), tile('三菱(CLS形 M)', x[1], '', 'SR 6%以上付き')]; })()
+        : (() => { const x = PF_SC_MITSU[k]; return [tile('三菱(CL形 G)', `G${x[0]}${x[1] ? '〜G' + x[1] : ''}`, '', 'SRなし 最小〜最大', 'cu'), tile('三菱(CLS形 M)', `${x[2]}${x[3] && x[3] !== x[2] ? '〜' + x[3] : ''}`, '', 'SRなし')]; })();
+      return {
+        tiles: t.concat([tile('富士電機', [fe ? `E: G${fe}` : '', fj ? `JC: G${fj}` : ''].filter(Boolean).join(' / ') || '表にない容量', '', '単一バンク'), tile('コンデンサの定格電流', na(In, 2), 'A', `${k}kvar ÷ (√3 × 6.6kV)`)]),
+        notes: ['コンデンサ用は投入時の突入電流(定格の70倍・2ms)と、高調波による連続通電(SRなし1.5倍・あり1.3倍)に耐える定格を選びます。容量はリアクトルを含む設備容量です。' + PF_NOTE]
+      };
+    }
+    const row = PF_MOTOR.find(r => r[0] >= v.kw);
+    return {tiles: [tile('三菱(CLS形)の最小定格', row ? row[1] : '表の範囲外', '', row ? `${row[0]}kW以下の欄` : '3,000kW超はメーカーに確認', 'cu')],
+      table: {h: '三菱 高圧電動機用 CLS形(最小値)', head: ['電動機 kW以下', 'ヒューズ'], rows: PF_MOTOR.map(r => [String(r[0]), r[1]]), hl: row ? PF_MOTOR.indexOf(row) : undefined},
+      notes: ['始動電流5倍・始動時間10秒・繰り返し30,000回を前提とした値です。始動条件が違うときはメーカーに確認してください。' + PF_NOTE]};
+  }
+});
+const PF_NOTE = ' 表記「G30(T15)」は一般用定格30A・変圧器用特性で15A相当を表します(T=変圧器用、M=電動機用、C=コンデンサ用、G=一般用)。PFの選定値はメーカーごとに違うので、使う製品のカタログで確認してください。';
+
+// ---------- 漏電遮断器 ----------
+const ELCB_USE = [['gen', '感電防止(一般)', 30, 0.1], ['noearth', '接地工事が困難な場所', 15, 0.1], ['bath', '洋風浴室内のコンセント', 15, 0.1], ['night', '深夜電力機器', 30, 0.1], ['relax', 'C種・D種接地を500Ωに緩和する', 100, 0.2], ['port', '可搬式・移動式の電動機械器具(労働安全衛生規則)', 30, 0.1]];
+addTool({
+  id: 'elcb', g: '短絡・地絡・保護', name: '漏電遮断器の要否と感度電流',
+  desc: '使用電圧と場所から漏電遮断器を付けるべきか(内線規程 1375-1表)、用途から定格感度電流の目安を求めます。',
+  fields: [
+    {id: 'v', l: '対地電圧', t: 'sel', d: '150', o: [['150', '150V以下(100V回路・単相3線の200Vなど)'], ['300', '150V超300V以下(三相200V Δ回路など)']]},
+    {id: 'pl', l: '場所', t: 'sel', d: 'humid', o: [['dry', '乾燥した場所'], ['humid', '湿気の多い場所'], ['wet', '水気のある場所(雨線外を含む)']]},
+    {id: 'house', l: '住宅か', t: 'sel', d: 'no', o: [['no', '住宅以外'], ['yes', '住宅']]},
+    {id: 'use', l: '用途', t: 'sel', d: 'gen', o: ELCB_USE.map(u => [u[0], u[1]])}
+  ],
+  calc(v) {
+    const need = v.house === 'yes' || v.pl === 'wet' || (v.v === '300' && v.pl === 'humid');
+    const u = ELCB_USE.find(x => x[0] === v.use);
+    return {
+      tiles: [tile('漏電遮断器', need ? '施設する' : '表では不要', '', v.house === 'yes' ? '住宅は原則として施設(1375-1表 備考)' : '内線規程 1375-1表', need ? 'cu' : 'ok'),
+        tile('定格感度電流の目安', u[2], 'mA', `${u[3]}秒以内に動作(${u[1]})`, 'cu')],
+      notes: ['電技解釈 第36条: 金属製外箱をもつ使用電圧60V超の低圧機械器具に電気を送る電路には地絡遮断装置を施設します。乾燥した場所、対地電圧150V以下で水気のない場所、二重絶縁の器具、C種・D種接地が3Ω以下 などは省略できます。', '感度電流の目安は三菱電機・パナソニックの資料と内線規程の該当節によります。0.5秒以内に地絡を遮断する装置があると、C種・D種接地は500Ωまで緩和できます(第17条)。']
+    };
+  }
+});
+
+// ---------- 接地棒 ----------
+const SOIL = [['manual', '大地抵抗率を直接入力', null], ['clay', '水田・湿地(粘土質) 〜150Ω·m', [10, 150]], ['field', '畑地(粘土質) 10〜200Ω·m', [10, 200]], ['marsh', '沼沢地・泥地 80〜200Ω·m', [80, 200]], ['csand', '粘土質砂地 150〜300Ω·m', [150, 300]], ['sand', '砂地 250〜500Ω·m', [250, 500]], ['gravel', '表土下の砂利層 100〜1000Ω·m', [100, 1000]], ['mount', '山地 200〜2000Ω·m', [200, 2000]], ['river', '河岸・河床跡(砂利・玉石) 1000〜5000Ω·m', [1000, 5000]], ['rock', '山地(岩盤地帯) 2000〜5000Ω·m', [2000, 5000]]];
+addTool({
+  id: 'rod', g: '短絡・地絡・保護', name: '接地棒の接地抵抗(概算)',
+  desc: '大地抵抗率と接地棒の長さ・太さから、接地棒1本の接地抵抗を求めます。目標の抵抗値にするための本数の目安も出します。',
+  fields: [
+    {id: 'soil', l: '土の種類', t: 'sel', d: 'field', o: SOIL.map(s => [s[0], s[1]])},
+    {id: 'rho', l: '大地抵抗率', u: 'Ω·m', d: 100, show: v => v.soil === 'manual'},
+    {id: 'l', l: '接地棒の長さ(打込み深さ)', u: 'm', d: 1.5, chips: [1, 1.5, 3, 4.5]},
+    {id: 'd', l: '接地棒の直径', u: 'mm', d: 14, chips: [10, 14, 18]},
+    {id: 'n', l: '本数(並列)', u: '本', d: 1, chips: [1, 2, 3, 4]},
+    {id: 'goal', l: '目標の接地抵抗', u: 'Ω', d: 100, chips: [10, 100, 500]}
+  ],
+  calc(v) {
+    const s = SOIL.find(x => x[0] === v.soil);
+    const R1 = rho => rho / (2 * Math.PI * v.l) * (Math.log(8 * v.l / (v.d / 1000)) - 1);
+    if (!s[2]) {
+      const r = R1(v.rho), rn = r / v.n;
+      return {tiles: [tile('1本の接地抵抗', na(r, 1), 'Ω', `ρ = ${v.rho}Ω·m`, 'cu'), tile(`${v.n}本並列(理想値)`, na(rn, 1), 'Ω', '実際は集合係数で大きくなる', rn <= v.goal ? 'ok' : 'ng'), tile('目標に必要な本数(理想値)', Math.ceil(r / v.goal), '本', `${v.goal}Ω以下にするには`)], notes: [ROD_NOTE]};
+    }
+    const [a, b] = s[2], ra = R1(a), rb = R1(b), rg = R1(Math.sqrt(a * b));
+    return {
+      tiles: [tile('1本の接地抵抗(目安)', `${na(ra, 0)}〜${na(rb, 0)}`, 'Ω', `中央値 ${na(rg, 0)}Ω(ρ ${na(Math.sqrt(a * b), 0)}Ω·m)`, 'cu'),
+        tile(`${v.n}本並列(理想値・中央値)`, na(rg / v.n, 1), 'Ω', '実際は集合係数で大きくなる', rg / v.n <= v.goal ? 'ok' : 'ng'), tile('目標に必要な本数(中央値)', Math.ceil(rg / v.goal), '本', `${v.goal}Ω以下にするには(理想値)`)],
+      notes: [ROD_NOTE, '土の大地抵抗率は農水省 電気設備工事施工指針・日本地工の資料の範囲です。同じ土でも水分・季節で大きく変わるので、施工後は必ず測定してください。']
+    };
+  }
+});
+const ROD_NOTE = 'R = ρ ÷ (2πL) × (ln(8L ÷ d) − 1)(Dwight の式、d=直径)。並列にしたときの値は単純に本数で割った理想値で、実際は接地極どうしの干渉(集合係数)で大きくなります。接地極の間隔は3m以上、できれば長さの2倍以上をとってください。';
+
+// ---------- CT ----------
+const CT_PRI = [5, 10, 15, 20, 30, 40, 50, 60, 75, 100, 150, 200, 300, 400, 500, 600, 750, 800, 1000, 1200, 1500, 2000, 2500, 3000, 4000];
+const IV_R20 = {'2': 9.24, '3.5': 5.20, '5.5': 3.33, '8': 2.31};
+addTool({
+  id: 'ctsel', g: '試験・点検', name: '変流器(CT)の選定と二次負担',
+  desc: '最大負荷電流からCTの定格一次電流の目安を選び、二次配線と計器・継電器の負担の合計が定格負担に収まるか確かめます。',
+  fields: [
+    {id: 'i', l: '最大負荷電流(一次)', u: 'A', d: 45},
+    {id: 'w', l: '二次配線の太さ', t: 'sel', d: '2', o: Object.keys(IV_R20).map(k => [k, k + 'mm²'])},
+    {id: 'len', l: '二次配線の往復の長さ', u: 'm', d: 20},
+    {id: 'dev', l: '計器・継電器の負担の合計', u: 'VA', d: 5},
+    {id: 'rb', l: 'CTの定格負担', t: 'sel', d: '15', o: [5, 10, 15, 25, 40].map(x => [String(x), x + 'VA'])}
+  ],
+  calc(v) {
+    const pri = CT_PRI.find(p => p >= v.i * 1.5 - 1e-9), wva = 25 * IV_R20[v.w] * v.len / 1000, tot = wva + v.dev, ok = tot <= +v.rb;
+    return {
+      tiles: [tile('定格一次電流の目安', pri ? `${pri}/5A` : '–', '', `最大負荷電流 ${v.i}A × 1.5 以上`, 'cu'), tile('二次配線の負担', na(wva, 2), 'VA', `5A² × ${IV_R20[v.w]}Ω/km × ${v.len}m`),
+        tile('負担の合計', na(tot, 2), 'VA', `定格 ${v.rb}VA`, ok ? 'ok' : 'ng')],
+      notes: ['二次電流5A、配線抵抗は20℃のIV導体抵抗(JIS)で計算しています。定格負担を超えると誤差が大きくなり、過電流定数(保護用CTが正しく変成できる倍率)も下がります。', 'キュービクル用のCT(JIS C 4620 附属書A)は一次20〜200A、確度1P・1PS、過電流定数 n>10、定格負担10・25・40VAなどです。定格一次電流は負荷電流の1.5倍程度が目安で、OCRの整定範囲・瞬時要素との協調も確認してください。']
+    };
+  }
+});
+
+// ---------- 太陽光 ----------
+// 年平均の最適傾斜角日射量(NEDO MONSOLA-20)kWh/m²/日、JIS C 8907 の係数
+const SOLAR_SITE = [['tokyo', '東京(最適傾斜37°)', 4.41], ['osaka', '大阪(最適傾斜34°)', 4.53], ['nagoya', '名古屋(最適傾斜37°)', 4.73], ['manual', '日射量を直接入力', null]];
+const SOLAR_MOUNT = [['18.4', '架台設置'], ['21.5', '屋根置き'], ['25.4', '屋根一体'], ['28.0', '裏面密閉']];
+addTool({
+  id: 'solar', g: '負荷・電線', name: '太陽光発電の年間発電量(概算)',
+  desc: 'パネル容量と設置地点の日射量から、JIS C 8907 の考え方で年間の発電量を概算します。',
+  fields: [
+    {id: 'p', l: '太陽電池の容量', u: 'kW', d: 50},
+    {id: 'site', l: '地点', t: 'sel', d: 'tokyo', o: SOLAR_SITE.map(s => [s[0], s[1]])},
+    {id: 'h', l: '傾斜面日射量(年平均)', u: 'kWh/m²/日', d: 4.0, step: 0.01, show: v => v.site === 'manual'},
+    {id: 'mt', l: '設置方法', t: 'sel', d: '18.4', o: SOLAR_MOUNT},
+    {id: 'tav', l: '年平均気温', u: '℃', d: 16},
+    {id: 'yen', l: '電力の単価(自家消費・売電)', u: '円/kWh', d: 20}
+  ],
+  calc(v) {
+    const s = SOLAR_SITE.find(x => x[0] === v.site), H = s[2] || v.h;
+    const Kp = 0.97 * 0.95 * 0.94 * 0.97 * 0.90, Kpt = 1 + (-0.45) * (v.tav + (+v.mt) - 25) / 100, K = Kp * Kpt;
+    const E = K * v.p * H * 365;
+    return {
+      tiles: [tile('年間発電量', na(E, 0), 'kWh', `${na(E / v.p, 0)}kWh/kW`, 'cu'), tile('総合設計係数 K', nfix(K, 3), '', `${nfix(Kp, 3)} × 温度補正 ${nfix(Kpt, 3)}`), tile('金額の目安', na(E * v.yen, 0), '円/年', `${v.yen}円/kWh`)],
+      steps: [{b: '基本設計係数 K′', s: '0.97 × 0.95 × 0.94 × 0.97 × 0.90(汚れ・経時・回路・アレイ・インバータ)', v: nfix(Kp, 3)}, {op: '×', b: '温度補正 KPT', s: `1 − 0.45% × (${v.tav} + ${v.mt} − 25)`, v: nfix(Kpt, 3)}, {op: '→', b: '年間発電量', s: `K × ${v.p}kW × ${H}kWh/m²/日 × 365`, v: na(E, 0) + ' kWh', cls: 'total'}],
+      notes: ['JIS C 8907 の式で、係数は系統連系の標準値、温度係数は −0.45%/℃ としています。日射量は NEDO MONSOLA-20(2010〜2018年)の年平均の最適傾斜角の値で、方位・傾斜・影で実際は変わります。']
+    };
+  }
+});
+
+// ---------- 住宅 ----------
+const HOUSE_BR = [[50, 1, 2, 1, '4'], [70, 1, 2, 2, '5'], [100, 2, 2, 2, '6'], [130, 2, 2, 4, '8'], [170, 3, 2, 5, '10'], [Infinity, 3, 2, 6, '11']];
+const HOUSE_OUT = [['居室 5㎡(3〜4.5畳)', 2, 0], ['居室 7.5〜10㎡(4.5〜6畳)', 3, 1], ['居室 10〜13㎡(6〜8畳)', 4, 1], ['居室 13〜17㎡(8〜10畳)', 5, 1], ['居室 17〜20㎡(10〜13畳)', 6, 1], ['台所', 6, 1], ['食事室', 4, 1], ['洗面・脱衣所', 2, 1], ['トイレ', 2, 0], ['玄関', 1, 0], ['廊下', 1, 0]];
+addTool({
+  id: 'house', g: '配線・施工', name: '住宅の分岐回路数とコンセント数',
+  desc: '住宅の延べ床面積から分岐回路数の目安、部屋ごとのコンセント数の目安を出します(内線規程 3605節)。',
+  fields: [{id: 'a', l: '住宅の延べ床面積', u: '㎡', d: 100, chips: [50, 70, 100, 130, 170]}],
+  calc(v) {
+    const r = HOUSE_BR.find(x => v.a <= x[0]);
+    return {
+      tiles: [tile('分岐回路数の目安', `${r[4]} + α`, '回路', `照明${r[1]}・台所${r[2]}・その他コンセント${r[3]}`, 'cu')],
+      table: {h: '部屋ごとのコンセント数の目安(1口・2口とも1個と数える)', head: ['場所', '100V', '200V'], rows: HOUSE_OUT.map(x => [x[0], String(x[1]), String(x[2])])},
+      notes: ['α はエアコン・IH・電子レンジ・食器洗い機・衣類乾燥機・浴室暖房など専用回路にする機器の数です。', '内線規程 第14版(2022年)の表をパナソニックの資料で確認した値です。エアコン・大容量機器・屋外のコンセントは別に加えます。']
+    };
   }
 });
 
